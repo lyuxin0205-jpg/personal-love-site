@@ -7,19 +7,18 @@ import { useContent } from "@/lib/content-store";
 export function WishList() {
   const { content, updateContent } = useContent();
   const { siteText, wishes } = content;
-  const done = siteText.wishlist.completed;
+  const wishlistText = siteText.wishlist as typeof siteText.wishlist & { completed?: string[] };
+  const done = wishlistText.completed || [];
 
   function toggleWish(wish: string) {
     updateContent((current) => {
-      const completed = current.siteText.wishlist.completed.includes(wish)
-        ? current.siteText.wishlist.completed.filter((item) => item !== wish)
-        : [...current.siteText.wishlist.completed, wish];
+      const completed = done.includes(wish) ? done.filter((item) => item !== wish) : [...done, wish];
 
       return {
         ...current,
         siteText: {
           ...current.siteText,
-          wishlist: { ...current.siteText.wishlist, completed }
+          wishlist: { ...current.siteText.wishlist, completed } as typeof current.siteText.wishlist & { completed: string[] }
         }
       };
     });
