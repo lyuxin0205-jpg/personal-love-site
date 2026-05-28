@@ -29,10 +29,16 @@ function deriveStoryCity(entry: SiteContent["story"][number]) {
 }
 
 function withDerivedContent(content: SiteContent): SiteContent {
+  const couple = { ...siteContent.couple, ...content.couple };
+  const gate = { ...siteContent.siteText.gate, ...content.siteText.gate };
+
+  if (couple.password === "0520") couple.password = "0419";
+  gate.placeholder = gate.placeholder.replace("0520", "0419");
+
   return {
     ...siteContent,
     ...content,
-    couple: { ...siteContent.couple, ...content.couple },
+    couple,
     story: (content.story || siteContent.story).map((entry) => ({
       ...entry,
       city: deriveStoryCity(entry)
@@ -48,7 +54,7 @@ function withDerivedContent(content: SiteContent): SiteContent {
       contentPages: { ...siteContent.siteText.contentPages, ...content.siteText.contentPages },
       hero: { ...siteContent.siteText.hero, ...content.siteText.hero },
       sections: { ...siteContent.siteText.sections, ...content.siteText.sections },
-      gate: { ...siteContent.siteText.gate, ...content.siteText.gate },
+      gate,
       storyDetail: { ...siteContent.siteText.storyDetail, ...content.siteText.storyDetail },
       album: { ...siteContent.siteText.album, ...content.siteText.album },
       diary: { ...siteContent.siteText.diary, ...content.siteText.diary },
