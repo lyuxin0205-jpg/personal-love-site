@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { StoryDetailView } from "@/components/story-detail-view";
 import { siteText, story } from "@/data/site";
 
+export const dynamicParams = false;
+
 export function generateStaticParams() {
   return story.map((item) => ({ slug: item.slug }));
 }
