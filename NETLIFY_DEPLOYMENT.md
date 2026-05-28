@@ -1,6 +1,6 @@
 # Netlify 部署说明
 
-这个项目是 Next.js App Router 项目，Netlify 部署时必须让 Netlify 的 Next.js 运行时接管 `.next` 构建产物。此前构建成功但访问 `netlify.app` 显示 404，最常见原因是发布目录被设置成了错误目录，例如 `out`、`dist` 或项目根目录。
+这个项目是 Next.js App Router 项目，但当前页面都可以静态生成，后台管理也先使用浏览器本地 `localStorage`。为了避免 Netlify 的 Next.js 函数路由没有正确接管时出现首页 404，项目已改为 Next.js 静态导出，Netlify 直接发布 `out/` 目录。
 
 ## 仓库内已固定的配置
 
@@ -9,11 +9,23 @@
 ```toml
 [build]
   command = "next build"
-  publish = ".next"
+  publish = "out"
 
 [build.environment]
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
+```
+
+`next.config.ts` 已经写入：
+
+```ts
+const nextConfig = {
+  output: "export",
+  trailingSlash: true,
+  images: {
+    unoptimized: true
+  }
+};
 ```
 
 `package.json` 已指定：
@@ -28,12 +40,12 @@
 
 - Base directory：留空，或者使用仓库根目录。
 - Build command：`next build`
-- Publish directory：`.next`
+- Publish directory：`out`
 - Node version：`20`
 - Package manager：Netlify 会根据 `pnpm-lock.yaml` 自动使用 pnpm。
 - Environment variables：建议添加 `NEXT_PUBLIC_SITE_URL=https://你的站点名.netlify.app`
 
-如果 Netlify 后台之前手动填过 `out`、`dist`、`build` 或其他发布目录，请改成 `.next`，或者清空后让仓库里的 `netlify.toml` 生效。
+如果 Netlify 后台之前手动填过 `.next`、`dist`、`build` 或其他发布目录，请改成 `out`，或者清空后让仓库里的 `netlify.toml` 生效。
 
 ## 重新部署
 
