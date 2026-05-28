@@ -1,9 +1,9 @@
 "use client";
 
-import { ChangeEvent, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { SiteContent, useContent } from "@/lib/content-store";
 
-const inputClass = "w-full border border-[#9dbbab]/28 bg-white/68 px-3 py-2 text-sm text-[#244d49] outline-none focus:border-[#6fb79f]/70";
+const inputClass = "w-full border border-[#9dbbab]/28 bg-white/68 px-3 py-2 text-sm text-[#244d49] outline-none transition focus:border-[#6fb79f]/70";
 const labelClass = "mb-1 block text-xs text-[#6f9284]";
 const panelClass = "border border-[#9dbbab]/22 bg-[#fffdf1]/68 p-5 shadow-[0_16px_42px_rgba(37,73,67,.06)]";
 const buttonClass = "rounded-full bg-[#6fb79f] px-4 py-2 text-sm text-white transition hover:bg-[#5da98f]";
@@ -21,30 +21,62 @@ function safeJson(value: unknown) {
 
 export default function AdminPage() {
   const { content, updateContent, resetContent, storageKey, status, saveError, lastSavedAt, isRemote, uploadFile, refreshContent } = useContent();
+  const [draft, setDraft] = useState<SiteContent>(() => cloneContent(content));
   const [jsonDrafts, setJsonDrafts] = useState<Record<string, string>>({});
   const [jsonError, setJsonError] = useState("");
+  const saveTimer = useRef<number | null>(null);
+  const editingRef = useRef(false);
+
+  useEffect(() => {
+    if (!editingRef.current) {
+      setDraft(cloneContent(content));
+      setJsonDrafts({});
+    }
+  }, [content]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  function scheduleSave(next: SiteContent) {
+    editingRef.current = true;
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      updateContent(() => next);
+      editingRef.current = false;
+    }, 700);
+  }
+
+  function updateDraft(updater: (current: SiteContent) => SiteContent) {
+    setDraft((current) => {
+      const next = updater(cloneContent(current));
+      scheduleSave(next);
+      return next;
+    });
+  }
 
   function updateCouple(field: keyof SiteContent["couple"], value: string) {
-    updateContent((current) => ({ ...current, couple: { ...current.couple, [field]: value } }));
+    updateDraft((current) => ({ ...current, couple: { ...current.couple, [field]: value } }));
   }
 
   function updatePlayer(field: keyof SiteContent["siteText"]["player"], value: string) {
-    updateContent((current) => ({
+    updateDraft((current) => ({
       ...current,
       siteText: { ...current.siteText, player: { ...current.siteText.player, [field]: value } }
     }));
   }
 
   function updateNavigation(index: number, label: string) {
-    updateContent((current) => {
-      const next = cloneContent(current);
-      next.siteText.navigation[index] = { ...next.siteText.navigation[index], label };
-      return next;
+    updateDraft((current) => {
+      current.siteText.navigation[index] = { ...current.siteText.navigation[index], label };
+      return current;
     });
   }
 
   function updateSection(section: keyof SiteContent["siteText"]["sections"], field: "eyebrow" | "title", value: string) {
-    updateContent((current) => ({
+    updateDraft((current) => ({
       ...current,
       siteText: {
         ...current.siteText,
@@ -61,24 +93,41 @@ export default function AdminPage() {
     if (!file) return;
     const url = await uploadFile(file, folder);
     onDone(url);
+    event.target.value = "";
   }
 
   function jsonValue(key: JsonKey) {
-    return jsonDrafts[key] ?? safeJson(content[key]);
+    return jsonDrafts[key] ?? safeJson(draft[key]);
   }
 
   function updateJson(key: JsonKey, value: string) {
+    editingRef.current = true;
     setJsonDrafts((current) => ({ ...current, [key]: value }));
   }
 
   function applyJson(key: JsonKey) {
     try {
       const parsed = JSON.parse(jsonValue(key));
-      updateContent((current) => ({ ...current, [key]: parsed }));
+      updateDraft((current) => ({ ...current, [key]: parsed }));
+      setJsonDrafts((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
       setJsonError("");
     } catch {
       setJsonError("JSON 格式不对，先检查逗号、引号和括号。");
     }
+  }
+
+  async function syncRemote() {
+    editingRef.current = false;
+    await refreshContent();
+  }
+
+  function restoreDefaults() {
+    editingRef.current = false;
+    resetContent();
   }
 
   return (
@@ -89,7 +138,7 @@ export default function AdminPage() {
             <p className="text-sm text-[#6f9284]">{isRemote ? "Supabase 云端内容" : storageKey}</p>
             <h1 className="cinema-title mt-2 text-4xl leading-tight sm:text-5xl">内容管理</h1>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#315f5a]/64">
-              {isRemote ? "保存后会同步到 Supabase，其他设备刷新后能看到最新内容。" : "当前未配置 Supabase 环境变量，会显示默认占位内容。"}
+              {isRemote ? "输入时会先保留在当前表单，停顿后自动同步到 Supabase，其他设备刷新后能看到最新内容。" : "当前未配置 Supabase 环境变量，会显示默认占位内容。"}
               {status === "saving" && " 正在保存..."}
               {lastSavedAt && status === "ready" && ` 已保存 ${lastSavedAt}`}
             </p>
@@ -97,8 +146,8 @@ export default function AdminPage() {
           </div>
           <div className="flex flex-wrap gap-3">
             <a href="/" className={ghostButtonClass}>回到前台</a>
-            <button onClick={() => void refreshContent()} className={ghostButtonClass}>同步云端</button>
-            <button onClick={resetContent} className={ghostButtonClass}>恢复占位数据</button>
+            <button onClick={() => void syncRemote()} className={ghostButtonClass}>同步云端</button>
+            <button onClick={restoreDefaults} className={ghostButtonClass}>恢复占位数据</button>
           </div>
         </header>
 
@@ -106,13 +155,13 @@ export default function AdminPage() {
           <section className={panelClass}>
             <h2 className="cinema-title mb-5 text-3xl">首页与私密页</h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label><span className={labelClass}>左侧姓名</span><input className={inputClass} value={content.couple.leftName} onChange={(event) => updateCouple("leftName", event.target.value)} /></label>
-              <label><span className={labelClass}>右侧姓名</span><input className={inputClass} value={content.couple.rightName} onChange={(event) => updateCouple("rightName", event.target.value)} /></label>
-              <label><span className={labelClass}>恋爱开始日期</span><input className={inputClass} value={content.couple.startDate} onChange={(event) => updateCouple("startDate", event.target.value)} /></label>
-              <label><span className={labelClass}>私密页密码</span><input className={inputClass} value={content.couple.password} onChange={(event) => updateCouple("password", event.target.value)} /></label>
-              <label><span className={labelClass}>首页标题</span><input className={inputClass} value={content.couple.heroLine} onChange={(event) => updateCouple("heroLine", event.target.value)} /></label>
-              <label className="sm:col-span-2"><span className={labelClass}>首页副标题</span><textarea className={`${inputClass} min-h-24 resize-y`} value={content.couple.subLine} onChange={(event) => updateCouple("subLine", event.target.value)} /></label>
-              <label><span className={labelClass}>首页背景图 URL</span><input className={inputClass} value={content.couple.backgroundImage} onChange={(event) => updateCouple("backgroundImage", event.target.value)} /></label>
+              <label><span className={labelClass}>左侧姓名</span><input className={inputClass} value={draft.couple.leftName} onChange={(event) => updateCouple("leftName", event.target.value)} /></label>
+              <label><span className={labelClass}>右侧姓名</span><input className={inputClass} value={draft.couple.rightName} onChange={(event) => updateCouple("rightName", event.target.value)} /></label>
+              <label><span className={labelClass}>恋爱开始日期</span><input className={inputClass} value={draft.couple.startDate} onChange={(event) => updateCouple("startDate", event.target.value)} /></label>
+              <label><span className={labelClass}>私密页密码</span><input className={inputClass} value={draft.couple.password} onChange={(event) => updateCouple("password", event.target.value)} /></label>
+              <label><span className={labelClass}>首页标题</span><input className={inputClass} value={draft.couple.heroLine} onChange={(event) => updateCouple("heroLine", event.target.value)} /></label>
+              <label className="sm:col-span-2"><span className={labelClass}>首页副标题</span><textarea className={`${inputClass} min-h-24 resize-y`} value={draft.couple.subLine} onChange={(event) => updateCouple("subLine", event.target.value)} /></label>
+              <label><span className={labelClass}>首页背景图 URL</span><input className={inputClass} value={draft.couple.backgroundImage} onChange={(event) => updateCouple("backgroundImage", event.target.value)} /></label>
               <label><span className={labelClass}>上传首页背景图</span><input className={inputClass} type="file" accept="image/*" onChange={(event) => void handleUpload(event, "images", (url) => updateCouple("backgroundImage", url))} /></label>
             </div>
           </section>
@@ -120,8 +169,8 @@ export default function AdminPage() {
           <section className={panelClass}>
             <h2 className="cinema-title mb-5 text-3xl">音乐</h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label><span className={labelClass}>曲名</span><input className={inputClass} value={content.siteText.player.title} onChange={(event) => updatePlayer("title", event.target.value)} /></label>
-              <label><span className={labelClass}>音乐 URL</span><input className={inputClass} value={content.siteText.player.src} onChange={(event) => updatePlayer("src", event.target.value)} /></label>
+              <label><span className={labelClass}>曲名</span><input className={inputClass} value={draft.siteText.player.title} onChange={(event) => updatePlayer("title", event.target.value)} /></label>
+              <label><span className={labelClass}>音乐 URL</span><input className={inputClass} value={draft.siteText.player.src} onChange={(event) => updatePlayer("src", event.target.value)} /></label>
               <label className="sm:col-span-2"><span className={labelClass}>上传音乐</span><input className={inputClass} type="file" accept="audio/*" onChange={(event) => void handleUpload(event, "audio", (url) => updatePlayer("src", url))} /></label>
             </div>
           </section>
@@ -129,7 +178,7 @@ export default function AdminPage() {
           <section className={panelClass}>
             <h2 className="cinema-title mb-5 text-3xl">导航</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {content.siteText.navigation.map((item, index) => (
+              {draft.siteText.navigation.map((item, index) => (
                 <label key={item.href}>
                   <span className={labelClass}>{item.href}</span>
                   <input className={inputClass} value={item.label} onChange={(event) => updateNavigation(index, event.target.value)} />
@@ -141,12 +190,12 @@ export default function AdminPage() {
           <section className={panelClass}>
             <h2 className="cinema-title mb-5 text-3xl">页面标题</h2>
             <div className="grid gap-4 md:grid-cols-2">
-              {(Object.keys(content.siteText.sections) as Array<keyof SiteContent["siteText"]["sections"]>).map((section) => (
+              {(Object.keys(draft.siteText.sections) as Array<keyof SiteContent["siteText"]["sections"]>).map((section) => (
                 <article key={section} className="border-t border-[#9dbbab]/20 pt-4">
                   <p className="mb-3 text-xs text-[#6f9284]">{section}</p>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label><span className={labelClass}>小标题</span><input className={inputClass} value={content.siteText.sections[section].eyebrow} onChange={(event) => updateSection(section, "eyebrow", event.target.value)} /></label>
-                    <label><span className={labelClass}>标题</span><input className={inputClass} value={content.siteText.sections[section].title} onChange={(event) => updateSection(section, "title", event.target.value)} /></label>
+                    <label><span className={labelClass}>小标题</span><input className={inputClass} value={draft.siteText.sections[section].eyebrow} onChange={(event) => updateSection(section, "eyebrow", event.target.value)} /></label>
+                    <label><span className={labelClass}>标题</span><input className={inputClass} value={draft.siteText.sections[section].title} onChange={(event) => updateSection(section, "title", event.target.value)} /></label>
                   </div>
                 </article>
               ))}
