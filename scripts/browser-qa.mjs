@@ -9,6 +9,7 @@ const { chromium } = require("playwright");
 const outDir = join(process.cwd(), "qa-artifacts");
 mkdirSync(outDir, { recursive: true });
 const root = process.cwd();
+const privatePassword = process.env.QA_PRIVATE_PASSWORD || "";
 
 function startServer() {
   const types = {
@@ -52,7 +53,7 @@ async function inspectViewport(browser, name, viewport, url) {
   });
   page.on("pageerror", (error) => messages.push(`pageerror: ${error.message}`));
   await page.goto(url, { waitUntil: "networkidle" });
-  await page.getByPlaceholder("默认密码 0520").fill("0520");
+  await page.locator("input").first().fill(privatePassword);
   await page.getByRole("button").click();
   await page.waitForSelector("text=故事", { timeout: 10000 });
   await page.waitForTimeout(2200);
