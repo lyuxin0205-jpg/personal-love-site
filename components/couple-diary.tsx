@@ -1,31 +1,22 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useContent } from "@/lib/content-store";
 
-type Diary = { by: string; text: string; date: string };
-
 export function CoupleDiary() {
-  const { content } = useContent();
+  const { content, updateContent } = useContent();
   const { diarySeeds, siteText } = content;
-  const [entries, setEntries] = useState<Diary[]>(diarySeeds);
   const [by, setBy] = useState(siteText.diary.authors[0]);
   const [text, setText] = useState("");
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem("only-us-diary");
-    if (saved) setEntries(JSON.parse(saved));
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("only-us-diary", JSON.stringify(entries));
-  }, [entries]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!text.trim()) return;
-    setEntries([{ by, text: text.trim(), date: new Date().toLocaleDateString("zh-CN") }, ...entries]);
+    updateContent((current) => ({
+      ...current,
+      diarySeeds: [{ by, text: text.trim(), date: new Date().toLocaleDateString("zh-CN") }, ...current.diarySeeds]
+    }));
     setText("");
   }
 
@@ -45,7 +36,7 @@ export function CoupleDiary() {
         </button>
       </form>
       <div className="grid gap-4">
-        {entries.map((entry, index) => (
+        {diarySeeds.map((entry, index) => (
           <motion.article key={`${entry.date}-${entry.text}`} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }} className="border-l border-[#8fb5a3]/34 bg-white/48 p-5">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm text-[#5b8f7f]">{entry.by}</p>
