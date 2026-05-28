@@ -1,19 +1,26 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { siteContent } from "@/data/site";
+import { isSupabaseConfigured, loadSiteContentFromSupabase, saveSiteContentToSupabase, uploadMediaToSupabase } from "@/lib/supabase-client";
 
 export type SiteContent = typeof siteContent;
 
 type ContentContextValue = {
   content: SiteContent;
+  status: "loading" | "ready" | "saving" | "error";
+  saveError: string;
+  lastSavedAt: string;
+  isRemote: boolean;
   setContent: (next: SiteContent) => void;
   updateContent: (updater: (current: SiteContent) => SiteContent) => void;
   resetContent: () => void;
+  refreshContent: () => Promise<void>;
+  uploadFile: (file: File, folder: "images" | "audio") => Promise<string>;
   storageKey: string;
 };
 
-const STORAGE_KEY = "couple-site-content-v1";
+const STORAGE_KEY = "supabase:shared-content";
 const ContentContext = createContext<ContentContextValue | null>(null);
 
 function deriveStoryCity(entry: SiteContent["story"][number]) {
@@ -57,42 +64,101 @@ function withDerivedContent(content: SiteContent): SiteContent {
   };
 }
 
-function readStoredContent() {
-  if (typeof window === "undefined") return siteContent;
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (!saved) return siteContent;
-  try {
-    return withDerivedContent(JSON.parse(saved));
-  } catch {
-    return siteContent;
-  }
-}
-
 export function ContentProvider({ children }: { children: ReactNode }) {
   const [content, setContentState] = useState<SiteContent>(siteContent);
+  const [status, setStatus] = useState<ContentContextValue["status"]>("loading");
+  const [saveError, setSaveError] = useState("");
+  const [lastSavedAt, setLastSavedAt] = useState("");
+  const remoteEnabled = isSupabaseConfigured();
+  const saveTimer = useRef<number | null>(null);
+  const loaded = useRef(false);
+
+  const saveRemote = useCallback(
+    (next: SiteContent) => {
+      if (!remoteEnabled || typeof window === "undefined") {
+        setStatus("ready");
+        return;
+      }
+
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      setStatus("saving");
+      saveTimer.current = window.setTimeout(async () => {
+        try {
+          await saveSiteContentToSupabase(next);
+          setSaveError("");
+          setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
+          setStatus("ready");
+        } catch (error) {
+          setSaveError(error instanceof Error ? error.message : "保存失败");
+          setStatus("error");
+        }
+      }, 650);
+    },
+    [remoteEnabled]
+  );
+
+  const refreshContent = useCallback(async () => {
+    if (!remoteEnabled) {
+      setContentState(withDerivedContent(siteContent));
+      setStatus("ready");
+      return;
+    }
+
+    setStatus((current) => (current === "saving" ? current : "loading"));
+    try {
+      const result = await loadSiteContentFromSupabase();
+      const normalized = withDerivedContent(result.content);
+      setContentState(normalized);
+      setSaveError("");
+      setStatus("ready");
+
+      if (result.empty && !loaded.current) {
+        saveRemote(normalized);
+      }
+      loaded.current = true;
+    } catch (error) {
+      setContentState(withDerivedContent(siteContent));
+      setSaveError(error instanceof Error ? error.message : "读取 Supabase 失败，当前显示默认占位内容。");
+      setStatus("error");
+      loaded.current = true;
+    }
+  }, [remoteEnabled, saveRemote]);
 
   useEffect(() => {
-    setContentState(readStoredContent());
-  }, []);
+    void refreshContent();
+  }, [refreshContent]);
+
+  useEffect(() => {
+    if (!remoteEnabled || typeof window === "undefined") return;
+    const timer = window.setInterval(() => {
+      if (status === "ready") void refreshContent();
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [refreshContent, remoteEnabled, status]);
 
   const value = useMemo<ContentContextValue>(() => {
     function persist(next: SiteContent) {
       const normalized = withDerivedContent(next);
       setContentState(normalized);
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      saveRemote(normalized);
     }
 
     return {
       content,
+      status,
+      saveError,
+      lastSavedAt,
+      isRemote: remoteEnabled,
       setContent: persist,
       updateContent: (updater) => persist(updater(content)),
       resetContent: () => {
-        setContentState(siteContent);
-        window.localStorage.removeItem(STORAGE_KEY);
+        persist(siteContent);
       },
+      refreshContent,
+      uploadFile: (file, folder) => uploadMediaToSupabase(file, folder),
       storageKey: STORAGE_KEY
     };
-  }, [content]);
+  }, [content, lastSavedAt, refreshContent, remoteEnabled, saveError, saveRemote, status]);
 
   return <ContentContext.Provider value={value}>{children}</ContentContext.Provider>;
 }
