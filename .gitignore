@@ -1,0 +1,10 @@
+.next/
+node_modules/
+qa-artifacts/
+*.log
+preview.err.log
+preview.out.log
+start-site.log
+.env*.local
+dist/
+out/

@@ -1,0 +1,27 @@
+{
+  "name": "cinematic-couple-memory",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "preview": "node scripts/preview-static.mjs",
+    "start": "next start",
+    "lint": "tsc --noEmit && node scripts/lint.mjs"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1.8",
+    "framer-motion": "^12.15.0",
+    "lucide-react": "^0.511.0",
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "tailwindcss": "^4.1.8",
+    "typescript": "^5.8.3"
+  }
+}
