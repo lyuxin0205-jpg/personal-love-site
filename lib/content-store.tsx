@@ -31,9 +31,11 @@ function deriveStoryCity(entry: SiteContent["story"][number]) {
 function withDerivedContent(content: SiteContent): SiteContent {
   const couple = { ...siteContent.couple, ...content.couple };
   const gate = { ...siteContent.siteText.gate, ...content.siteText.gate };
+  const wishlist = { ...siteContent.siteText.wishlist, ...content.siteText.wishlist } as SiteContent["siteText"]["wishlist"] & { completed?: string[] };
 
   if (couple.password === "0520") couple.password = "0419";
   gate.placeholder = gate.placeholder.replace("0520", "0419");
+  wishlist.completed ||= [];
 
   return {
     ...siteContent,
@@ -60,7 +62,7 @@ function withDerivedContent(content: SiteContent): SiteContent {
       diary: { ...siteContent.siteText.diary, ...content.siteText.diary },
       messageBoard: { ...siteContent.siteText.messageBoard, ...content.siteText.messageBoard },
       reminders: { ...siteContent.siteText.reminders, ...content.siteText.reminders },
-      wishlist: { ...siteContent.siteText.wishlist, ...content.siteText.wishlist },
+      wishlist,
       map: { ...siteContent.siteText.map, ...content.siteText.map },
       albumBook: { ...siteContent.siteText.albumBook, ...content.siteText.albumBook },
       player: { ...siteContent.siteText.player, ...content.siteText.player },
