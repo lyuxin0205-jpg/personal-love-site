@@ -6,5 +6,6 @@ preview.err.log
 preview.out.log
 start-site.log
 .env*.local
+tsconfig.tsbuildinfo
 dist/
 out/
