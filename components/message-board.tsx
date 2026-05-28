@@ -1,30 +1,27 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useContent } from "@/lib/content-store";
 
-type Note = { id: string; text: string; date: string };
-
 export function MessageBoard() {
-  const { content } = useContent();
+  const { content, updateContent } = useContent();
   const { siteText } = content;
-  const [notes, setNotes] = useState<Note[]>(siteText.messageBoard.defaultNotes);
   const [text, setText] = useState("");
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem("only-us-notes");
-    if (saved) setNotes(JSON.parse(saved));
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("only-us-notes", JSON.stringify(notes));
-  }, [notes]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!text.trim()) return;
-    setNotes([{ id: crypto.randomUUID(), text: text.trim(), date: siteText.messageBoard.justNowLabel }, ...notes]);
+    updateContent((current) => ({
+      ...current,
+      siteText: {
+        ...current.siteText,
+        messageBoard: {
+          ...current.siteText.messageBoard,
+          defaultNotes: [{ id: crypto.randomUUID(), text: text.trim(), date: current.siteText.messageBoard.justNowLabel }, ...current.siteText.messageBoard.defaultNotes]
+        }
+      }
+    }));
     setText("");
   }
 
@@ -37,7 +34,7 @@ export function MessageBoard() {
         </button>
       </form>
       <div className="grid gap-3">
-        {notes.map((note, index) => (
+        {siteText.messageBoard.defaultNotes.map((note, index) => (
           <motion.div key={note.id} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className={`border border-[#9dbbab]/16 p-4 text-[#244d49] shadow-[0_8px_18px_rgba(37,73,67,.06)] ${index % 2 ? "bg-[#eef6d9]" : "bg-[#e4f4f0]"}`}>
             <p className="leading-7">{note.text}</p>
             <p className="mt-3 text-xs text-[#315f5a]/42">{note.date}</p>
