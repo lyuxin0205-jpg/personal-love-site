@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ContentPageShell } from "@/components/content-page-shell";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { LoveMap } from "@/components/love-map";
 import { useContent } from "@/lib/content-store";
 
@@ -40,6 +41,7 @@ export default function CitiesPage() {
                     {siteText.storyDetail.openLabel}
                   </Link>
                 )}
+                <ItemEditLink section="trips" item={index} className="mt-3" />
               </motion.article>
             );
           })}
