@@ -72,6 +72,15 @@ function withDerivedContent(content: SiteContent): SiteContent {
   };
 }
 
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("读取文件失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ContentProvider({ children }: { children: ReactNode }) {
   const [content, setContentState] = useState<SiteContent>(siteContent);
   const [status, setStatus] = useState<ContentContextValue["status"]>("loading");
@@ -163,7 +172,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
         persist(siteContent);
       },
       refreshContent,
-      uploadFile: (file, folder) => uploadMediaToSupabase(file, folder),
+      uploadFile: (file, folder) => (remoteEnabled ? uploadMediaToSupabase(file, folder) : readFileAsDataUrl(file)),
       storageKey: STORAGE_KEY
     };
   }, [content, lastSavedAt, refreshContent, remoteEnabled, saveError, saveRemote, status]);
