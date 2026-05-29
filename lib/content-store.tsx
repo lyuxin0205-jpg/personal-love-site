@@ -6,15 +6,21 @@ import { deleteMediaFromSupabase, isSupabaseConfigured, loadSiteContentFromSupab
 
 export type SiteContent = typeof siteContent;
 
+export type SaveResult = {
+  ok: boolean;
+  error?: string;
+  content?: SiteContent;
+};
+
 type ContentContextValue = {
   content: SiteContent;
   status: "loading" | "ready" | "saving" | "error";
   saveError: string;
   lastSavedAt: string;
   isRemote: boolean;
-  setContent: (next: SiteContent) => void;
-  updateContent: (updater: (current: SiteContent) => SiteContent) => void;
-  resetContent: () => void;
+  setContent: (next: SiteContent) => Promise<SaveResult>;
+  updateContent: (updater: (current: SiteContent) => SiteContent) => Promise<SaveResult>;
+  resetContent: () => Promise<SaveResult>;
   refreshContent: () => Promise<void>;
   uploadFile: (file: File, folder: "images" | "audio", onProgress?: (progress: number) => void) => Promise<string>;
   deleteFile: (fileUrl: string) => Promise<void>;
@@ -95,37 +101,59 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   const [saveError, setSaveError] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState("");
   const remoteEnabled = isSupabaseConfigured();
-  const saveTimer = useRef<number | null>(null);
+  const contentRef = useRef<SiteContent>(siteContent);
   const loaded = useRef(false);
+  const saveQueue = useRef<Promise<SaveResult>>(Promise.resolve({ ok: true }));
+  const saveVersion = useRef(0);
 
   const saveRemote = useCallback(
-    (next: SiteContent) => {
+    (next: SiteContent): Promise<SaveResult> => {
       if (!remoteEnabled || typeof window === "undefined") {
+        contentRef.current = next;
         setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
         setStatus("ready");
-        return;
+        return Promise.resolve({ ok: true, content: next });
       }
 
-      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      const version = ++saveVersion.current;
       setStatus("saving");
-      saveTimer.current = window.setTimeout(async () => {
+
+      const run = async (): Promise<SaveResult> => {
         try {
           await saveSiteContentToSupabase(next);
-          setSaveError("");
-          setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
-          setStatus("ready");
+          const result = await loadSiteContentFromSupabase();
+          const normalized = withDerivedContent(result.content);
+
+          if (version === saveVersion.current) {
+            contentRef.current = normalized;
+            setContentState(normalized);
+            setSaveError("");
+            setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
+            setStatus("ready");
+          }
+
+          return { ok: true, content: normalized };
         } catch (error) {
-          setSaveError(error instanceof Error ? error.message : "保存失败");
-          setStatus("error");
+          const message = error instanceof Error ? error.message : "保存失败";
+          if (version === saveVersion.current) {
+            setSaveError(message);
+            setStatus("error");
+          }
+          return { ok: false, error: message };
         }
-      }, 650);
+      };
+
+      saveQueue.current = saveQueue.current.then(run, run);
+      return saveQueue.current;
     },
     [remoteEnabled]
   );
 
   const refreshContent = useCallback(async () => {
     if (!remoteEnabled) {
-      setContentState(withDerivedContent(siteContent));
+      const fallback = withDerivedContent(siteContent);
+      contentRef.current = fallback;
+      setContentState(fallback);
       setStatus("ready");
       return;
     }
@@ -134,16 +162,19 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     try {
       const result = await loadSiteContentFromSupabase();
       const normalized = withDerivedContent(result.content);
+      contentRef.current = normalized;
       setContentState(normalized);
       setSaveError("");
       setStatus("ready");
 
       if (result.empty && !loaded.current) {
-        saveRemote(normalized);
+        void saveRemote(normalized);
       }
       loaded.current = true;
     } catch (error) {
-      setContentState(withDerivedContent(siteContent));
+      const fallback = withDerivedContent(siteContent);
+      contentRef.current = fallback;
+      setContentState(fallback);
       setSaveError(error instanceof Error ? error.message : "读取 Supabase 失败，当前显示默认占位内容。");
       setStatus("error");
       loaded.current = true;
@@ -165,8 +196,9 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ContentContextValue>(() => {
     function persist(next: SiteContent) {
       const normalized = withDerivedContent(next);
+      contentRef.current = normalized;
       setContentState(normalized);
-      saveRemote(normalized);
+      return saveRemote(normalized);
     }
 
     return {
@@ -176,10 +208,8 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       lastSavedAt,
       isRemote: remoteEnabled,
       setContent: persist,
-      updateContent: (updater) => persist(updater(content)),
-      resetContent: () => {
-        persist(siteContent);
-      },
+      updateContent: (updater) => persist(updater(contentRef.current)),
+      resetContent: () => persist(siteContent),
       refreshContent,
       uploadFile: (file, folder, onProgress) => (remoteEnabled ? uploadMediaToSupabase(file, folder, onProgress) : readFileAsDataUrl(file, onProgress)),
       deleteFile: (fileUrl) => (remoteEnabled ? deleteMediaFromSupabase(fileUrl) : Promise.resolve()),

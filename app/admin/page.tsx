@@ -170,7 +170,7 @@ function compressImage(file: File) {
 }
 
 export default function AdminPage() {
-  const { content, updateContent, resetContent, storageKey, status, saveError, lastSavedAt, isRemote, uploadFile, deleteFile, refreshContent } = useContent();
+  const { content, setContent, resetContent, storageKey, status, saveError, lastSavedAt, isRemote, uploadFile, deleteFile, refreshContent } = useContent();
   const [draft, setDraft] = useState<SiteContent>(() => cloneContent(content));
   const [uploadError, setUploadError] = useState("");
   const [highlightTarget, setHighlightTarget] = useState("");
@@ -179,6 +179,7 @@ export default function AdminPage() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [draggedPhoto, setDraggedPhoto] = useState<number | null>(null);
+  const saveVersion = useRef(0);
   const saveTimer = useRef<number | null>(null);
   const editingRef = useRef(false);
 
@@ -204,12 +205,11 @@ export default function AdminPage() {
   }, [dirty, status]);
 
   useEffect(() => {
-    if (!lastSavedAt || status !== "ready") return;
-    setDirty(false);
-    setSaveNotice("✓ 保存成功");
+    if (!lastSavedAt || status !== "ready" || dirty) return;
+    setSaveNotice("✓ 已保存");
     const timer = window.setTimeout(() => setSaveNotice(""), 2600);
     return () => window.clearTimeout(timer);
-  }, [lastSavedAt, status]);
+  }, [dirty, lastSavedAt, status]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -234,13 +234,27 @@ export default function AdminPage() {
   }
 
   function scheduleSave(next: SiteContent) {
+    const version = ++saveVersion.current;
     setDirty(true);
+    setSaveNotice("");
     editingRef.current = true;
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
-      updateContent(() => next);
-      editingRef.current = false;
-    }, 650);
+    saveTimer.current = window.setTimeout(async () => {
+      const result = await setContent(next);
+      if (version !== saveVersion.current) return;
+
+      if (result.ok) {
+        if (result.content) setDraft(cloneContent(result.content));
+        setDirty(false);
+        setSaveNotice("✓ 已保存");
+        editingRef.current = false;
+        return;
+      }
+
+      setDirty(true);
+      setSaveNotice("保存失败");
+      editingRef.current = true;
+    }, 1000);
   }
 
   function updateDraft(updater: (current: SiteContent) => SiteContent) {
@@ -584,22 +598,32 @@ export default function AdminPage() {
   }
 
   async function syncRemote() {
+    if ((dirty || status === "saving") && !window.confirm("你有未保存的修改，是否重新读取云端内容？")) return;
     editingRef.current = false;
     await refreshContent();
+    setDirty(false);
+    setSaveNotice("");
   }
 
-  function restoreDefaults() {
+  async function restoreDefaults() {
     if (!window.confirm("确定恢复占位数据吗？当前修改会被覆盖。")) return;
     editingRef.current = false;
-    resetContent();
+    const result = await resetContent();
+    if (result.ok) {
+      setDirty(false);
+      setSaveNotice("✓ 已保存");
+      return;
+    }
+    setDirty(true);
+    setSaveNotice("保存失败");
   }
 
   return (
     <main className="min-h-screen bg-ink px-4 py-5 text-[#244d49] sm:px-8 lg:px-14">
       <div className="fixed left-1/2 top-4 z-[90] -translate-x-1/2">
-        {(status === "saving" || uploadBusy || saveNotice) && (
+        {(status === "saving" || status === "error" || uploadBusy || dirty || saveNotice) && (
           <div className="min-w-56 overflow-hidden rounded-[1rem] border border-[#8fb5a3]/24 bg-[#fffdf1]/92 px-4 py-3 text-sm text-[#315f5a] shadow-[0_12px_30px_rgba(37,73,67,.1)] backdrop-blur-md">
-            <p>{uploadBusy ? `正在上传... ${uploadProgress}%` : status === "saving" ? "正在保存..." : saveNotice}</p>
+            <p>{uploadBusy ? `正在上传... ${uploadProgress}%` : status === "error" || saveError ? "保存失败" : status === "saving" || dirty ? "正在保存..." : saveNotice}</p>
             {uploadBusy && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#dce8cc]"><div className="h-full rounded-full bg-[#6fb79f] transition-all duration-300" style={{ width: `${uploadProgress}%` }} /></div>}
           </div>
         )}
@@ -629,7 +653,7 @@ export default function AdminPage() {
                 <RefreshCw className="size-4" />
                 同步
               </button>
-              <button onClick={restoreDefaults} className={ghostButtonClass}>
+              <button onClick={() => void restoreDefaults()} className={ghostButtonClass}>
                 恢复占位
               </button>
             </div>
