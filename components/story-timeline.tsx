@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo } from "react";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { useContent } from "@/lib/content-store";
 
 export function StoryTimeline() {
@@ -46,6 +47,7 @@ export function StoryTimeline() {
               >
                 {siteText.storyDetail.openLabel}
               </Link>
+              <ItemEditLink section="story" item={item.slug} className="ml-3 mt-6" />
             </div>
           </motion.article>
         ))}
