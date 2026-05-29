@@ -11,6 +11,7 @@ const panelClass = "border border-[#9dbbab]/22 bg-[#fffdf1]/72 p-5 shadow-[0_16p
 const buttonClass = "rounded-full bg-[#6fb79f] px-4 py-2 text-sm text-white transition hover:bg-[#5da98f]";
 const ghostButtonClass = "rounded-full border border-[#8fb5a3]/28 px-4 py-2 text-sm text-[#315f5a] transition hover:bg-white/70";
 const dangerButtonClass = "rounded-full border border-rose/24 px-4 py-2 text-sm text-rose transition hover:bg-rose/8";
+const highlightClass = "ring-2 ring-[#6fb79f]/48 shadow-[0_18px_48px_rgba(37,73,67,.11)]";
 
 function cloneContent(content: SiteContent): SiteContent {
   return JSON.parse(JSON.stringify(content));
@@ -37,6 +38,7 @@ export default function AdminPage() {
   const { content, updateContent, resetContent, storageKey, status, saveError, lastSavedAt, isRemote, uploadFile, refreshContent } = useContent();
   const [draft, setDraft] = useState<SiteContent>(() => cloneContent(content));
   const [uploadError, setUploadError] = useState("");
+  const [highlightTarget, setHighlightTarget] = useState("");
   const saveTimer = useRef<number | null>(null);
   const editingRef = useRef(false);
 
@@ -49,6 +51,30 @@ export default function AdminPage() {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get("section");
+    if (!section) return;
+
+    const item = params.get("item");
+    const target = item ? `${section}:${item}` : `${section}:section`;
+    setHighlightTarget(target);
+
+    window.setTimeout(() => {
+      const element = item
+        ? document.querySelector(`[data-admin-target="${target}"]`)
+        : document.getElementById(`admin-${section}`);
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 320);
+
+    const timer = window.setTimeout(() => setHighlightTarget(""), 5200);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  function isHighlighted(section: string, item?: string | number) {
+    return highlightTarget === `${section}:${item ?? "section"}`;
+  }
 
   function scheduleSave(next: SiteContent) {
     editingRef.current = true;
@@ -203,6 +229,31 @@ export default function AdminPage() {
     updateDraft((current) => ({ ...current, story: current.story.filter((_, itemIndex) => itemIndex !== index) }));
   }
 
+  function addDiary() {
+    updateDraft((current) => ({
+      ...current,
+      diarySeeds: [
+        {
+          by: current.siteText.diary.authors[0],
+          text: "写下一句今天发生的小事。",
+          date: new Date().toLocaleDateString("zh-CN")
+        },
+        ...current.diarySeeds
+      ]
+    }));
+  }
+
+  function updateDiary(index: number, patch: Partial<SiteContent["diarySeeds"][number]>) {
+    updateDraft((current) => {
+      current.diarySeeds[index] = { ...current.diarySeeds[index], ...patch };
+      return current;
+    });
+  }
+
+  function removeDiary(index: number) {
+    updateDraft((current) => ({ ...current, diarySeeds: current.diarySeeds.filter((_, itemIndex) => itemIndex !== index) }));
+  }
+
   function addTrip() {
     updateDraft((current) => ({
       ...current,
@@ -237,6 +288,38 @@ export default function AdminPage() {
 
   function removeAnniversary(index: number) {
     updateDraft((current) => ({ ...current, anniversaries: current.anniversaries.filter((_, itemIndex) => itemIndex !== index) }));
+  }
+
+  function addWish() {
+    updateDraft((current) => ({ ...current, wishes: ["新的愿望", ...current.wishes] }));
+  }
+
+  function updateWish(index: number, value: string) {
+    updateDraft((current) => {
+      const previous = current.wishes[index];
+      const wishlist = current.siteText.wishlist as typeof current.siteText.wishlist & { completed?: string[] };
+      current.wishes[index] = value;
+      wishlist.completed = (wishlist.completed || []).map((item: string) => (item === previous ? value : item));
+      return current;
+    });
+  }
+
+  function removeWish(index: number) {
+    updateDraft((current) => {
+      const removed = current.wishes[index];
+      const wishlist = current.siteText.wishlist as typeof current.siteText.wishlist & { completed?: string[] };
+      return {
+        ...current,
+        wishes: current.wishes.filter((_, itemIndex) => itemIndex !== index),
+        siteText: {
+          ...current.siteText,
+          wishlist: {
+            ...current.siteText.wishlist,
+            completed: (wishlist.completed || []).filter((item: string) => item !== removed)
+          }
+        }
+      };
+    });
   }
 
   async function syncRemote() {
@@ -321,7 +404,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className={panelClass}>
+          <section id="admin-photos" className={`${panelClass} ${isHighlighted("photos") ? highlightClass : ""}`}>
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="cinema-title text-3xl">相册</h2>
               <label className={`${buttonClass} inline-flex w-fit cursor-pointer items-center justify-center`}>
@@ -331,7 +414,11 @@ export default function AdminPage() {
             </div>
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {draft.photos.map((photo, index) => (
-                <article key={`${photo.src}-${index}`} className="border border-[#9dbbab]/18 bg-white/50 p-3">
+                <article
+                  key={`${photo.src}-${index}`}
+                  data-admin-target={`photos:${index}`}
+                  className={`border border-[#9dbbab]/18 bg-white/50 p-3 transition duration-700 ${isHighlighted("photos", index) ? highlightClass : ""}`}
+                >
                   <Image src={photo.src} alt={photo.title} width={720} height={540} unoptimized className="mb-4 aspect-[4/3] w-full bg-[#e4f4f0] object-cover" />
                   <div className="grid gap-3">
                     <label><span className={labelClass}>更换照片</span><input className={inputClass} type="file" accept="image/*" onChange={(event) => void replacePhotoImage(event, index)} /></label>
@@ -346,14 +433,18 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className={panelClass}>
+          <section id="admin-story" className={`${panelClass} ${isHighlighted("story") ? highlightClass : ""}`}>
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="cinema-title text-3xl">故事</h2>
               <button className={buttonClass} onClick={addStory}>新增故事</button>
             </div>
             <div className="grid gap-5">
               {draft.story.map((item, index) => (
-                <article key={`${item.slug}-${index}`} className="grid gap-4 border border-[#9dbbab]/18 bg-white/48 p-3 lg:grid-cols-[260px_1fr]">
+                <article
+                  key={`${item.slug}-${index}`}
+                  data-admin-target={`story:${item.slug}`}
+                  className={`grid gap-4 border border-[#9dbbab]/18 bg-white/48 p-3 transition duration-700 lg:grid-cols-[260px_1fr] ${isHighlighted("story", item.slug) ? highlightClass : ""}`}
+                >
                   <div>
                     <Image src={item.image} alt={item.title} width={720} height={540} unoptimized className="aspect-[4/3] w-full bg-[#e4f4f0] object-cover" />
                     <label className="mt-3 block"><span className={labelClass}>上传封面图片</span><input className={inputClass} type="file" accept="image/*" onChange={(event) => void replaceStoryImage(event, index)} /></label>
@@ -375,14 +466,41 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className={panelClass}>
+          <section id="admin-diarySeeds" className={`${panelClass} ${isHighlighted("diarySeeds") ? highlightClass : ""}`}>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="cinema-title text-3xl">日记</h2>
+              <button className={buttonClass} onClick={addDiary}>新增日记</button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {draft.diarySeeds.map((entry, index) => (
+                <article
+                  key={`${entry.date}-${entry.text}-${index}`}
+                  data-admin-target={`diarySeeds:${index}`}
+                  className={`grid gap-3 border border-[#9dbbab]/18 bg-white/48 p-4 transition duration-700 ${isHighlighted("diarySeeds", index) ? highlightClass : ""}`}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label><span className={labelClass}>作者</span><input className={inputClass} value={entry.by} onChange={(event) => updateDiary(index, { by: event.target.value })} /></label>
+                    <label><span className={labelClass}>日期</span><input className={inputClass} value={entry.date} onChange={(event) => updateDiary(index, { date: event.target.value })} /></label>
+                  </div>
+                  <label><span className={labelClass}>内容</span><textarea className={textareaClass} value={entry.text} onChange={(event) => updateDiary(index, { text: event.target.value })} /></label>
+                  <button className={dangerButtonClass} onClick={() => removeDiary(index)}>删除日记</button>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section id="admin-trips" className={`${panelClass} ${isHighlighted("trips") ? highlightClass : ""}`}>
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="cinema-title text-3xl">城市记录</h2>
               <button className={buttonClass} onClick={addTrip}>新增城市</button>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               {draft.trips.map((trip, index) => (
-                <article key={`${trip.city}-${index}`} className="grid gap-3 border border-[#9dbbab]/18 bg-white/48 p-4 sm:grid-cols-2">
+                <article
+                  key={`${trip.city}-${index}`}
+                  data-admin-target={`trips:${index}`}
+                  className={`grid gap-3 border border-[#9dbbab]/18 bg-white/48 p-4 transition duration-700 sm:grid-cols-2 ${isHighlighted("trips", index) ? highlightClass : ""}`}
+                >
                   <label><span className={labelClass}>城市名字</span><input className={inputClass} value={trip.city} onChange={(event) => updateTrip(index, { city: event.target.value })} /></label>
                   <label><span className={labelClass}>地图横向位置</span><input className={inputClass} type="number" min={0} max={100} value={trip.x} onChange={(event) => updateTrip(index, { x: Number(event.target.value) })} /></label>
                   <label><span className={labelClass}>地图纵向位置</span><input className={inputClass} type="number" min={0} max={100} value={trip.y} onChange={(event) => updateTrip(index, { y: Number(event.target.value) })} /></label>
@@ -393,18 +511,41 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className={panelClass}>
+          <section id="admin-anniversaries" className={`${panelClass} ${isHighlighted("anniversaries") ? highlightClass : ""}`}>
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="cinema-title text-3xl">纪念日</h2>
               <button className={buttonClass} onClick={addAnniversary}>新增纪念日</button>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               {draft.anniversaries.map((item, index) => (
-                <article key={`${item.title}-${index}`} className="grid gap-3 border border-[#9dbbab]/18 bg-white/48 p-4">
+                <article
+                  key={`${item.title}-${index}`}
+                  data-admin-target={`anniversaries:${index}`}
+                  className={`grid gap-3 border border-[#9dbbab]/18 bg-white/48 p-4 transition duration-700 ${isHighlighted("anniversaries", index) ? highlightClass : ""}`}
+                >
                   <label><span className={labelClass}>纪念日名称</span><input className={inputClass} value={item.title} onChange={(event) => updateAnniversary(index, { title: event.target.value })} /></label>
                   <label><span className={labelClass}>日期</span><input className={inputClass} type="date" value={item.date} onChange={(event) => updateAnniversary(index, { date: event.target.value })} /></label>
                   <label><span className={labelClass}>备注</span><textarea className={textareaClass} value={item.note} onChange={(event) => updateAnniversary(index, { note: event.target.value })} /></label>
                   <button className={dangerButtonClass} onClick={() => removeAnniversary(index)}>删除纪念日</button>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section id="admin-wishes" className={`${panelClass} ${isHighlighted("wishes") ? highlightClass : ""}`}>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="cinema-title text-3xl">愿望清单</h2>
+              <button className={buttonClass} onClick={addWish}>新增愿望</button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {draft.wishes.map((wish, index) => (
+                <article
+                  key={`${wish}-${index}`}
+                  data-admin-target={`wishes:${index}`}
+                  className={`grid gap-3 border border-[#9dbbab]/18 bg-white/48 p-4 transition duration-700 ${isHighlighted("wishes", index) ? highlightClass : ""}`}
+                >
+                  <label><span className={labelClass}>愿望内容</span><input className={inputClass} value={wish} onChange={(event) => updateWish(index, event.target.value)} /></label>
+                  <button className={dangerButtonClass} onClick={() => removeWish(index)}>删除愿望</button>
                 </article>
               ))}
             </div>

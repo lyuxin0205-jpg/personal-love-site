@@ -13,9 +13,11 @@ export function WishList() {
 
   function toggleWish(wish: string) {
     updateContent((current) => {
-      const completed = current.siteText.wishlist.completed.includes(wish)
-        ? current.siteText.wishlist.completed.filter((item) => item !== wish)
-        : [...current.siteText.wishlist.completed, wish];
+      const currentWishlist = current.siteText.wishlist as typeof current.siteText.wishlist & { completed?: string[] };
+      const currentCompleted = currentWishlist.completed || [];
+      const completed = currentCompleted.includes(wish)
+        ? currentCompleted.filter((item: string) => item !== wish)
+        : [...currentCompleted, wish];
 
       return {
         ...current,
