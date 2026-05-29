@@ -32,7 +32,10 @@ export function ContentPageShell({
       <div className="relative z-10 mx-auto max-w-7xl">
         <header className="mb-14">
           <div className="mb-9 flex flex-wrap items-center justify-between gap-4 border-b border-[#8fb5a3]/20 pb-5">
-            <Link href="/" className="border-b border-[#8fb5a3]/36 pb-1 text-sm text-[#315f5a]/66 transition duration-700 hover:border-[#315f5a]/50 hover:text-[#244d49]">
+            <Link
+              href="/"
+              className="inline-flex rounded-full border border-[#4e8173]/28 bg-[#fffdf1]/54 px-3.5 py-1.5 text-sm font-medium text-[#214f49] transition duration-500 ease-out hover:-translate-y-0.5 hover:border-[#315f5a]/42 hover:bg-[#eef5dc]/72 hover:text-[#173f3a] active:translate-y-0 active:scale-[0.98]"
+            >
               {siteText.contentPages.homeLabel}
             </Link>
             <nav className="flex flex-wrap gap-2 text-sm text-[#315f5a]/62">
