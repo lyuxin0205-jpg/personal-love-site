@@ -14,7 +14,7 @@ export function LifeFragments() {
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
         {lifeFragments.map((item, index) => (
           <motion.article
-            key={`${item.time}-${item.place}`}
+            key={`${item.time}-${item.place}-${index}`}
             initial={{ opacity: 0, y: 18 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-12%" }}

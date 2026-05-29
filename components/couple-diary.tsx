@@ -1,22 +1,27 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ItemEditLink } from "@/components/item-edit-link";
 import { useContent } from "@/lib/content-store";
 
 export function CoupleDiary() {
   const { content, updateContent } = useContent();
-  const { diarySeeds, siteText } = content;
-  const [by, setBy] = useState(siteText.diary.authors[0]);
+  const { couple, diarySeeds, siteText } = content;
+  const authors = useMemo(() => [couple.leftName, couple.rightName], [couple.leftName, couple.rightName]);
+  const [by, setBy] = useState(authors[0]);
   const [text, setText] = useState("");
+
+  useEffect(() => {
+    setBy((current) => (authors.includes(current) ? current : authors[0]));
+  }, [authors]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!text.trim()) return;
     updateContent((current) => ({
       ...current,
-      diarySeeds: [{ by, text: text.trim(), date: new Date().toLocaleDateString("zh-CN") }, ...current.diarySeeds]
+      diarySeeds: [{ by: authors.includes(by) ? by : authors[0], text: text.trim(), date: new Date().toLocaleDateString("zh-CN") }, ...current.diarySeeds]
     }));
     setText("");
   }
@@ -25,7 +30,7 @@ export function CoupleDiary() {
     <div className="border border-[#9dbbab]/22 bg-[#fffdf1]/66 p-5 shadow-[0_16px_42px_rgba(37,73,67,.08)] sm:p-7">
       <form onSubmit={submit} className="mb-6 grid gap-3">
         <div className="flex w-fit rounded-full border border-[#8fb5a3]/22 bg-white/60 p-1">
-          {siteText.diary.authors.map((name) => (
+          {authors.map((name) => (
             <button key={name} type="button" onClick={() => setBy(name)} className={`rounded-full px-4 py-2 text-sm transition ${by === name ? "bg-[#6fb79f] text-white" : "text-[#315f5a]/58 hover:text-[#244d49]"}`}>
               {name}
             </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { useContent } from "@/lib/content-store";
 
 export function LoveMap() {
@@ -26,7 +27,10 @@ export function LoveMap() {
               <span className="relative block size-3 rounded-full bg-[#315f5a] shadow-[0_0_0_7px_rgba(111,159,96,.16),0_8px_18px_rgba(37,73,67,.18)]" />
               <span className="absolute left-5 top-1/2 -translate-y-1/2 whitespace-nowrap text-sm text-[#244d49]">{trip.city}</span>
               <div className="pointer-events-none absolute bottom-12 left-1/2 w-56 -translate-x-1/2 border border-[#8fb5a3]/22 bg-[#fffdf1]/92 p-4 opacity-0 shadow-[0_12px_28px_rgba(37,73,67,.12)] backdrop-blur-md transition group-hover:opacity-100">
-                <p className="text-sm text-[#244d49]">{trip.city}</p>
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <p className="text-sm text-[#244d49]">{trip.city}</p>
+                  <ItemEditLink section="trips" item={index} className="pointer-events-auto -mr-2 -mt-2 opacity-45 hover:opacity-90" />
+                </div>
                 <p className="mt-2 text-xs leading-5 text-[#315f5a]/58">{trip.caption}</p>
               </div>
             </div>

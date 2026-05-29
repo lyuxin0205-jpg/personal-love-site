@@ -35,19 +35,49 @@ function deriveStoryCity(entry: SiteContent["story"][number]) {
   return entry.place.split("/")[0]?.trim() || entry.place;
 }
 
+function normalizeDiaryAuthor(author: string, couple: SiteContent["couple"], incomingAuthors?: string[]) {
+  const fallbackAuthors = siteContent.siteText.diary.authors;
+  if (author === fallbackAuthors[0] || author === incomingAuthors?.[0]) return couple.leftName;
+  if (author === fallbackAuthors[1] || author === incomingAuthors?.[1]) return couple.rightName;
+  return author;
+}
+
+function deriveHeroLine(couple: SiteContent["couple"], incomingCouple: SiteContent["couple"]) {
+  const incomingLine = incomingCouple.heroLine || siteContent.couple.heroLine;
+  const defaultLine = siteContent.couple.heroLine;
+
+  if (incomingLine === defaultLine || /^.+和.+的日常$/.test(incomingLine)) {
+    return `${couple.leftName}和${couple.rightName}的日常`;
+  }
+
+  return incomingLine;
+}
+
 function withDerivedContent(content: SiteContent): SiteContent {
-  const couple = { ...siteContent.couple, ...content.couple };
+  const incomingCouple = content.couple || siteContent.couple;
+  const couple = { ...siteContent.couple, ...incomingCouple };
   const gate = { ...siteContent.siteText.gate, ...content.siteText.gate };
   const wishlist = { ...siteContent.siteText.wishlist, ...content.siteText.wishlist } as SiteContent["siteText"]["wishlist"] & { completed?: string[] };
 
-  if (couple.password === "0520") couple.password = "0419";
-  gate.placeholder = gate.placeholder.replace("0520", "0419");
+  if (incomingCouple.password && !incomingCouple.passwordHash) {
+    couple.passwordHash = "";
+  }
+  if (couple.passwordHash) {
+    couple.password = "";
+  }
+  couple.heroLine = deriveHeroLine(couple, incomingCouple);
   wishlist.completed ||= [];
+  const incomingDiaryAuthors = content.siteText?.diary?.authors;
+  const diary = content.diarySeeds || siteContent.diarySeeds;
 
   return {
     ...siteContent,
     ...content,
     couple,
+    diarySeeds: diary.map((entry) => ({
+      ...entry,
+      by: normalizeDiaryAuthor(entry.by, couple, incomingDiaryAuthors)
+    })),
     story: (content.story || siteContent.story).map((entry) => ({
       ...entry,
       city: deriveStoryCity(entry)
@@ -66,7 +96,7 @@ function withDerivedContent(content: SiteContent): SiteContent {
       gate,
       storyDetail: { ...siteContent.siteText.storyDetail, ...content.siteText.storyDetail },
       album: { ...siteContent.siteText.album, ...content.siteText.album },
-      diary: { ...siteContent.siteText.diary, ...content.siteText.diary },
+      diary: { ...siteContent.siteText.diary, ...content.siteText.diary, authors: [couple.leftName, couple.rightName] },
       messageBoard: { ...siteContent.siteText.messageBoard, ...content.siteText.messageBoard },
       reminders: { ...siteContent.siteText.reminders, ...content.siteText.reminders },
       wishlist,
@@ -109,10 +139,11 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   const saveRemote = useCallback(
     (next: SiteContent): Promise<SaveResult> => {
       if (!remoteEnabled || typeof window === "undefined") {
+        const message = "Supabase 环境变量未配置，无法保存到云端。请配置 NEXT_PUBLIC_SUPABASE_URL、NEXT_PUBLIC_SUPABASE_ANON_KEY 和 NEXT_PUBLIC_SUPABASE_BUCKET。";
         contentRef.current = next;
-        setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
-        setStatus("ready");
-        return Promise.resolve({ ok: true, content: next });
+        setSaveError(message);
+        setStatus("error");
+        return Promise.resolve({ ok: false, error: message, content: next });
       }
 
       const version = ++saveVersion.current;
@@ -154,7 +185,8 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       const fallback = withDerivedContent(siteContent);
       contentRef.current = fallback;
       setContentState(fallback);
-      setStatus("ready");
+      setSaveError("Supabase 环境变量未配置，当前只显示默认占位内容，后台修改不会持久化。");
+      setStatus("error");
       return;
     }
 

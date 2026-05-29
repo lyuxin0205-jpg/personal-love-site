@@ -307,8 +307,16 @@ export async function uploadMediaToSupabase(file: File, folder: "images" | "audi
     throw new Error("Supabase 环境变量未配置，无法上传文件。");
   }
 
-  const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase();
-  const objectPath = `${folder}/${Date.now()}-${cleanName}`;
+  const cleanName = file.name
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+  const random = Math.random().toString(36).slice(2, 8);
+  const fallbackExtension = file.type === "image/webp" ? "webp" : file.type === "image/jpeg" ? "jpg" : file.type === "image/png" ? "png" : "bin";
+  const safeName = cleanName || `${Date.now()}-${random}.${fallbackExtension}`;
+  const uniqueName = /^\d{13}-[a-z0-9]{6}\./.test(safeName) ? safeName : `${Date.now()}-${random}-${safeName}`;
+  const objectPath = `${folder}/${uniqueName}`;
 
   await new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();

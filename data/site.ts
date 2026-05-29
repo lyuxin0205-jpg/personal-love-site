@@ -27,11 +27,14 @@ export const contentSource = {
  */
 export const couple = {
   // 两个人的名字，会显示在首页和加载页。
-  leftName: "小夏",
-  rightName: "阿屿",
+  leftName: "左边的人",
+  rightName: "右边的人",
 
-  // 私密页密码。想改密码就改这里。
-  password: "0520",
+  // 私密页密码使用哈希保存。首次初始化密码由后台/Supabase 管理，不在页面明文显示。
+  password: "",
+  passwordHash: "dd745bd4519c28cc2132ecda8b8cc4b05abb98efa19aa808fad0304804c9a28c",
+  passwordUpdatedAt: "",
+  accessVersion: "initial",
 
   // 恋爱开始日期。格式必须是 YYYY-MM-DD，例如 "2024-05-20"。
   startDate: "2024-05-20",
@@ -40,7 +43,7 @@ export const couple = {
   backgroundImage: "/images/hero-couple.jpg",
 
   // 首页大标题和副文案。
-  heroLine: "小夏和阿屿的日常",
+  heroLine: "两个人的日常",
   subLine: "不是为了把每一天写得很漂亮，只是怕以后忘了这些很小的瞬间。",
   nameConnector: "和",
 
@@ -119,7 +122,7 @@ export const siteText = {
     eyebrow: "私人页面",
     title: "这是我们的小地方",
     description: "输入属于两个人的密码，看看这些被认真留下来的日常。",
-    placeholder: "默认密码 0520",
+    placeholder: "输入访问密码",
     submitLabel: "进入",
     error: "密码不对，再想想那个特别的数字。"
   },
@@ -140,7 +143,7 @@ export const siteText = {
 
   // 双人日记输入区。
   diary: {
-    authors: ["小夏", "阿屿"],
+    authors: ["左边的人", "右边的人"],
     placeholder: "写下今天很小但想记住的一件事",
     button: "写进日记"
   },
@@ -377,8 +380,8 @@ export const trips = [
  * 这里控制首次打开时显示的默认内容。
  */
 export const diarySeeds = [
-  { by: "小夏", text: "今天看到一片很像夏天的云，第一反应还是想拍给你。", date: "2026.05.12" },
-  { by: "阿屿", text: "路过那家甜品店，已经记下她下次想吃的口味。", date: "2026.05.18" }
+  { by: "左边的人", text: "今天看到一片很像夏天的云，第一反应还是想拍给你。", date: "2026.05.12" },
+  { by: "右边的人", text: "路过那家甜品店，已经记下她下次想吃的口味。", date: "2026.05.18" }
 ];
 
 /**

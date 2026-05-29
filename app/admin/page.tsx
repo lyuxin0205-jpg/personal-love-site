@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ChangeEvent, MouseEvent, ReactNode, useEffect, useRef, useState } from "react";
 import Image from "next/image";
@@ -16,9 +16,10 @@ import {
   RefreshCw,
   Trash2
 } from "lucide-react";
+import { clearAccessState, hashPasscode } from "@/lib/access-control";
 import { SiteContent, useContent } from "@/lib/content-store";
 
-type EditableSection = "photos" | "story" | "lifeFragments" | "anniversaries" | "wishes" | "diarySeeds" | "trips" | "basic";
+type EditableSection = "photos" | "story" | "timeAtmosphere" | "lifeFragments" | "anniversaries" | "wishes" | "diarySeeds" | "trips" | "basic";
 
 const inputClass =
   "w-full rounded-2xl border border-[#9dbbab]/26 bg-white/72 px-4 py-3 text-[16px] leading-6 text-[#244d49] outline-none transition focus:border-[#6fb79f]/70 focus:bg-white";
@@ -37,7 +38,8 @@ const highlightClass = "ring-2 ring-[#6fb79f]/48 shadow-[0_18px_48px_rgba(37,73,
 const adminTabs: Array<{ id: EditableSection; label: string }> = [
   { id: "photos", label: "相册" },
   { id: "story", label: "故事" },
-  { id: "lifeFragments", label: "片段" },
+  { id: "timeAtmosphere", label: "生活气味" },
+  { id: "lifeFragments", label: "鐗囨" },
   { id: "anniversaries", label: "纪念日" },
   { id: "wishes", label: "愿望" },
   { id: "diarySeeds", label: "日记" },
@@ -121,49 +123,115 @@ function readImageRatio(file: File) {
   });
 }
 
-function compressImage(file: File) {
-  return new Promise<File>((resolve) => {
-    if (!file.type.startsWith("image/")) {
-      resolve(file);
-      return;
-    }
+const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
 
+type OptimizedImage = {
+  file: File;
+  beforeSize: number;
+  afterSize: number;
+  width: number;
+  height: number;
+  format: "webp" | "jpeg";
+};
+
+function humanFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
+  return `${(size / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function randomFileName(extension: "webp" | "jpg") {
+  const random = Math.random().toString(36).slice(2, 8);
+  return `${Date.now()}-${random}.${extension}`;
+}
+
+function nextFrame() {
+  return new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+async function createOptimizedBlob(canvas: HTMLCanvasElement) {
+  const qualities = [0.82, 0.78, 0.75];
+  let best: { blob: Blob; format: "webp" | "jpeg" } | null = null;
+
+  for (const quality of qualities) {
+    const blob = await canvasToBlob(canvas, "image/webp", quality);
+    if (!blob) break;
+    if (!best || blob.size < best.blob.size) best = { blob, format: "webp" };
+    if (blob.size <= 1024 * 1024) return best;
+  }
+
+  if (best) return best;
+
+  for (const quality of qualities) {
+    const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+    if (!blob) continue;
+    if (!best || blob.size < best.blob.size) best = { blob, format: "jpeg" };
+    if (blob.size <= 1024 * 1024) return best;
+  }
+
+  return best;
+}
+
+async function compressImage(file: File): Promise<OptimizedImage> {
+  if (!allowedImageTypes.includes(file.type)) {
+    throw new Error("只支持 JPG、PNG、WebP 图片。");
+  }
+
+  await nextFrame();
+  const url = URL.createObjectURL(file);
+
+  return new Promise<OptimizedImage>((resolve, reject) => {
     const image = new window.Image();
-    const url = URL.createObjectURL(file);
     image.onload = () => {
-      const maxSide = 1800;
-      const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
-      const width = Math.max(1, Math.round(image.naturalWidth * scale));
-      const height = Math.max(1, Math.round(image.naturalHeight * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext("2d");
-      if (!context) {
-        URL.revokeObjectURL(url);
-        resolve(file);
-        return;
-      }
-
-      context.drawImage(image, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
+      void (async () => {
+        const maxSide = 1600;
+        const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+        const width = Math.max(1, Math.round(image.naturalWidth * scale));
+        const height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) {
           URL.revokeObjectURL(url);
-          if (!blob || blob.size >= file.size) {
-            resolve(file);
-            return;
-          }
+          reject(new Error("图片压缩失败：当前浏览器无法处理这张图片。"));
+          return;
+        }
 
-          const nextName = file.name.replace(/\.[^.]+$/, "") || "photo";
-          resolve(new File([blob], `${nextName}.jpg`, { type: "image/jpeg", lastModified: Date.now() }));
-        },
-        "image/jpeg",
-        0.78
-      );
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, 0, 0, width, height);
+
+        const optimized = await createOptimizedBlob(canvas);
+        URL.revokeObjectURL(url);
+
+        if (!optimized) {
+          reject(new Error("图片压缩失败：无法生成压缩文件。"));
+          return;
+        }
+
+        const { blob, format } = optimized;
+        const extension = format === "webp" ? "webp" : "jpg";
+        resolve({
+          file: new File([blob], randomFileName(extension), { type: format === "webp" ? "image/webp" : "image/jpeg", lastModified: Date.now() }),
+          beforeSize: file.size,
+          afterSize: blob.size,
+          width,
+          height,
+          format
+        });
+      })().catch((error) => {
+        URL.revokeObjectURL(url);
+        reject(error instanceof Error ? error : new Error("图片压缩失败"));
+      });
     };
     image.onerror = () => {
       URL.revokeObjectURL(url);
-      resolve(file);
+      reject(new Error("图片读取失败，请换一张 JPG、PNG 或 WebP 图片。"));
     };
     image.src = url;
   });
@@ -178,7 +246,12 @@ export default function AdminPage() {
   const [saveNotice, setSaveNotice] = useState("");
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadPhase, setUploadPhase] = useState<"idle" | "compressing" | "uploading">("idle");
+  const [lastCompression, setLastCompression] = useState<OptimizedImage | null>(null);
   const [draggedPhoto, setDraggedPhoto] = useState<number | null>(null);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordNotice, setPasswordNotice] = useState("");
   const saveVersion = useRef(0);
   const saveTimer = useRef<number | null>(null);
   const editingRef = useRef(false);
@@ -221,7 +294,7 @@ export default function AdminPage() {
     setHighlightTarget(target);
 
     window.setTimeout(() => {
-      const element = item ? document.querySelector(`[data-admin-target="${target}"]`) : document.getElementById(`admin-${section}`);
+      const element = (item ? document.querySelector(`[data-admin-target="${target}"]`) : null) || document.getElementById(`admin-${section}`);
       element?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 320);
 
@@ -273,7 +346,92 @@ export default function AdminPage() {
   }
 
   function updateCouple(field: keyof SiteContent["couple"], value: string) {
-    updateDraft((current) => ({ ...current, couple: { ...current.couple, [field]: value } }));
+    updateDraft((current) => {
+      const previousLeft = current.couple.leftName;
+      const previousRight = current.couple.rightName;
+      const couple = { ...current.couple, [field]: value };
+      const nextAuthors = [couple.leftName, couple.rightName];
+
+      return {
+        ...current,
+        couple,
+        siteText: {
+          ...current.siteText,
+          diary: { ...current.siteText.diary, authors: nextAuthors }
+        },
+        diarySeeds: current.diarySeeds.map((entry) => ({
+          ...entry,
+          by: entry.by === previousLeft ? couple.leftName : entry.by === previousRight ? couple.rightName : entry.by
+        }))
+      };
+    });
+  }
+
+  function addHeroNote() {
+    updateDraft((current) => ({
+      ...current,
+      couple: { ...current.couple, heroNotes: [...current.couple.heroNotes, "写下一句最近想留住的小事。"] }
+    }));
+  }
+
+  function updateHeroNote(index: number, value: string) {
+    updateDraft((current) => {
+      current.couple.heroNotes[index] = value;
+      return current;
+    });
+  }
+
+  function removeHeroNote(index: number) {
+    if (!window.confirm("确定删除吗？")) return;
+    updateDraft((current) => ({
+      ...current,
+      couple: { ...current.couple, heroNotes: current.couple.heroNotes.filter((_, itemIndex) => itemIndex !== index) }
+    }));
+  }
+
+  function moveHeroNote(index: number, direction: -1 | 1) {
+    updateDraft((current) => ({
+      ...current,
+      couple: { ...current.couple, heroNotes: moveItem(current.couple.heroNotes, index, direction) }
+    }));
+  }
+
+  async function updateAccessPassword() {
+    const nextPassword = passwordInput.trim();
+    if (!nextPassword) {
+      setPasswordNotice("请输入新访问密码。");
+      return;
+    }
+    if (nextPassword.length < 4) {
+      setPasswordNotice("密码至少 4 位。");
+      return;
+    }
+
+    setPasswordBusy(true);
+    setPasswordNotice("");
+    try {
+      const next = cloneContent(draft);
+      next.couple = {
+        ...next.couple,
+        password: "",
+        passwordHash: await hashPasscode(nextPassword),
+        passwordUpdatedAt: new Date().toISOString(),
+        accessVersion: String(Date.now())
+      };
+      const result = await setContent(next);
+      if (!result.ok) {
+        setPasswordNotice(`保存失败：${result.error || "请稍后重试"}`);
+        return;
+      }
+
+      setPasswordInput("");
+      if (result.content) setDraft(cloneContent(result.content));
+      setDirty(false);
+      clearAccessState("密码已修改，请使用新密码重新登录");
+      setPasswordNotice("密码已修改，请使用新密码重新登录");
+    } finally {
+      setPasswordBusy(false);
+    }
   }
 
   function updatePlayer(field: keyof SiteContent["siteText"]["player"], value: string) {
@@ -290,6 +448,15 @@ export default function AdminPage() {
     });
   }
 
+  async function optimizeImageForUpload(file: File) {
+    setUploadPhase("compressing");
+    setUploadProgress(0);
+    setLastCompression(null);
+    const optimized = await compressImage(file);
+    setLastCompression(optimized);
+    return optimized;
+  }
+
   async function uploadFromInput(event: ChangeEvent<HTMLInputElement>, folder: "images" | "audio") {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -298,14 +465,18 @@ export default function AdminPage() {
     try {
       setUploadBusy(true);
       setUploadProgress(0);
+      setUploadPhase(folder === "images" ? "compressing" : "uploading");
       setUploadError("");
-      return await uploadFile(folder === "images" ? await compressImage(file) : file, folder, setUploadProgress);
+      const uploadTarget = folder === "images" ? (await optimizeImageForUpload(file)).file : file;
+      setUploadPhase("uploading");
+      return await uploadFile(uploadTarget, folder, setUploadProgress);
     } catch (error) {
       const message = error instanceof Error ? error.message : "上传失败";
       setUploadError(message);
       return "";
     } finally {
       setUploadBusy(false);
+      setUploadPhase("idle");
       window.setTimeout(() => setUploadProgress(0), 700);
     }
   }
@@ -318,15 +489,17 @@ export default function AdminPage() {
     try {
       setUploadBusy(true);
       setUploadProgress(0);
+      setUploadPhase("compressing");
       setUploadError("");
       const created: SiteContent["photos"] = [];
       for (const [index, file] of files.entries()) {
-        const compressed = await compressImage(file);
+        const optimized = await optimizeImageForUpload(file);
+        setUploadPhase("uploading");
         const [src, ratio] = await Promise.all([
-          uploadFile(compressed, "images", (progress) => {
+          uploadFile(optimized.file, "images", (progress) => {
             setUploadProgress(Math.round(((index + progress / 100) / files.length) * 100));
           }),
-          readImageRatio(compressed)
+          readImageRatio(optimized.file)
         ]);
         created.push({
           src,
@@ -344,6 +517,7 @@ export default function AdminPage() {
       setUploadError(error instanceof Error ? error.message : "上传失败");
     } finally {
       setUploadBusy(false);
+      setUploadPhase("idle");
       window.setTimeout(() => setUploadProgress(0), 700);
     }
   }
@@ -355,14 +529,17 @@ export default function AdminPage() {
     try {
       setUploadBusy(true);
       setUploadProgress(0);
+      setUploadPhase("compressing");
       setUploadError("");
-      const compressed = await compressImage(file);
-      const [src, ratio] = await Promise.all([uploadFile(compressed, "images", setUploadProgress), readImageRatio(compressed)]);
+      const optimized = await optimizeImageForUpload(file);
+      setUploadPhase("uploading");
+      const [src, ratio] = await Promise.all([uploadFile(optimized.file, "images", setUploadProgress), readImageRatio(optimized.file)]);
       updatePhoto(index, { src, ratio });
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "上传失败");
     } finally {
       setUploadBusy(false);
+      setUploadPhase("idle");
       window.setTimeout(() => setUploadProgress(0), 700);
     }
   }
@@ -428,7 +605,7 @@ export default function AdminPage() {
           slug: newSlug(),
           date: currentMonth(),
           city: "新的城市",
-          time: "傍晚",
+          time: "鍌嶆櫄",
           place: "还没写地点",
           weather: "有风",
           music: current.siteText.player.title,
@@ -459,10 +636,33 @@ export default function AdminPage() {
     updateDraft((current) => ({ ...current, story: moveItem(current.story, index, direction) }));
   }
 
+  function addTimeAtmosphere() {
+    updateDraft((current) => ({
+      ...current,
+      timeAtmosphere: [{ season: "新的季节", weather: "天气", city: "地点", line: "写下最近生活里的气味。" }, ...current.timeAtmosphere]
+    }));
+  }
+
+  function updateTimeAtmosphere(index: number, patch: Partial<SiteContent["timeAtmosphere"][number]>) {
+    updateDraft((current) => {
+      current.timeAtmosphere[index] = { ...current.timeAtmosphere[index], ...patch };
+      return current;
+    });
+  }
+
+  function removeTimeAtmosphere(index: number) {
+    if (!window.confirm("确定删除吗？")) return;
+    updateDraft((current) => ({ ...current, timeAtmosphere: current.timeAtmosphere.filter((_, itemIndex) => itemIndex !== index) }));
+  }
+
+  function moveTimeAtmosphere(index: number, direction: -1 | 1) {
+    updateDraft((current) => ({ ...current, timeAtmosphere: moveItem(current.timeAtmosphere, index, direction) }));
+  }
+
   function addDiary() {
     updateDraft((current) => ({
       ...current,
-      diarySeeds: [{ by: current.siteText.diary.authors[0], text: "写下一句今天发生的小事。", date: valueToDotDate(todayDate()) }, ...current.diarySeeds]
+      diarySeeds: [{ by: current.couple.leftName, text: "写下一句今天发生的小事。", date: valueToDotDate(todayDate()) }, ...current.diarySeeds]
     }));
   }
 
@@ -478,10 +678,14 @@ export default function AdminPage() {
     updateDraft((current) => ({ ...current, diarySeeds: current.diarySeeds.filter((_, itemIndex) => itemIndex !== index) }));
   }
 
+  function moveDiary(index: number, direction: -1 | 1) {
+    updateDraft((current) => ({ ...current, diarySeeds: moveItem(current.diarySeeds, index, direction) }));
+  }
+
   function addLifeFragment() {
     updateDraft((current) => ({
       ...current,
-      lifeFragments: [{ time: "新的时间", place: "还没写地点", text: "写下一段很小、但想留下来的生活片段。" }, ...current.lifeFragments]
+	      lifeFragments: [{ time: "新的时间", place: "还没写地点", text: "写下一段很小、但想留下来的生活片段。" }, ...current.lifeFragments]
     }));
   }
 
@@ -495,6 +699,10 @@ export default function AdminPage() {
   function removeLifeFragment(index: number) {
     if (!window.confirm("确定删除吗？")) return;
     updateDraft((current) => ({ ...current, lifeFragments: current.lifeFragments.filter((_, itemIndex) => itemIndex !== index) }));
+  }
+
+  function moveLifeFragment(index: number, direction: -1 | 1) {
+    updateDraft((current) => ({ ...current, lifeFragments: moveItem(current.lifeFragments, index, direction) }));
   }
 
   function addTrip() {
@@ -516,10 +724,14 @@ export default function AdminPage() {
     updateDraft((current) => ({ ...current, trips: current.trips.filter((_, itemIndex) => itemIndex !== index) }));
   }
 
+  function moveTrip(index: number, direction: -1 | 1) {
+    updateDraft((current) => ({ ...current, trips: moveItem(current.trips, index, direction) }));
+  }
+
   function addAnniversary() {
     updateDraft((current) => ({
       ...current,
-      anniversaries: [{ title: "新的纪念日", date: todayDate(), note: "写下这一天为什么重要。" }, ...current.anniversaries]
+	      anniversaries: [{ title: "新的纪念日", date: todayDate(), note: "写下这一天为什么重要。" }, ...current.anniversaries]
     }));
   }
 
@@ -618,13 +830,27 @@ export default function AdminPage() {
     setSaveNotice("保存失败");
   }
 
+  const uploadStatusText =
+    uploadPhase === "compressing"
+      ? "正在压缩..."
+      : uploadPhase === "uploading"
+        ? `正在上传... ${uploadProgress}%`
+        : uploadBusy
+          ? "正在处理..."
+          : "";
+
   return (
     <main className="min-h-screen bg-ink px-4 py-5 text-[#244d49] sm:px-8 lg:px-14">
       <div className="fixed left-1/2 top-4 z-[90] -translate-x-1/2">
         {(status === "saving" || status === "error" || uploadBusy || dirty || saveNotice) && (
           <div className="min-w-56 overflow-hidden rounded-[1rem] border border-[#8fb5a3]/24 bg-[#fffdf1]/92 px-4 py-3 text-sm text-[#315f5a] shadow-[0_12px_30px_rgba(37,73,67,.1)] backdrop-blur-md">
-            <p>{uploadBusy ? `正在上传... ${uploadProgress}%` : status === "error" || saveError ? "保存失败" : status === "saving" || dirty ? "正在保存..." : saveNotice}</p>
+            <p>{uploadBusy ? uploadStatusText : status === "error" || saveError ? "保存失败" : status === "saving" || dirty ? "正在保存..." : saveNotice}</p>
             {uploadBusy && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#dce8cc]"><div className="h-full rounded-full bg-[#6fb79f] transition-all duration-300" style={{ width: `${uploadProgress}%` }} /></div>}
+            {uploadBusy && lastCompression && (
+              <p className="mt-2 text-xs text-[#315f5a]/58">
+                {humanFileSize(lastCompression.beforeSize)} → {humanFileSize(lastCompression.afterSize)}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -654,7 +880,7 @@ export default function AdminPage() {
                 同步
               </button>
               <button onClick={() => void restoreDefaults()} className={ghostButtonClass}>
-                恢复占位
+                鎭㈠鍗犱綅
               </button>
             </div>
           </div>
@@ -676,7 +902,7 @@ export default function AdminPage() {
               <label className={`${buttonClass} w-full cursor-pointer sm:w-auto`}>
                 <ImagePlus className="size-4" />
                 {uploadBusy ? "正在上传..." : "上传照片"}
-                <input className="sr-only" type="file" accept="image/*" multiple disabled={uploadBusy} onChange={(event) => void addPhotosFromUpload(event)} />
+                <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={uploadBusy} onChange={(event) => void addPhotosFromUpload(event)} />
               </label>
             </SectionHeader>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -698,8 +924,8 @@ export default function AdminPage() {
                   <div className="mt-4 grid gap-3">
                     <label className={ghostButtonClass}>
                       <Camera className="size-4" />
-                      {uploadBusy ? "正在处理..." : "更换照片"}
-                      <input className="sr-only" type="file" accept="image/*" disabled={uploadBusy} onChange={(event) => void replacePhotoImage(event, index)} />
+                      {uploadBusy ? "正在处理..." : "鏇存崲鐓х墖"}
+                      <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadBusy} onChange={(event) => void replacePhotoImage(event, index)} />
                     </label>
                     <Field label="标题"><input className={inputClass} value={photo.title} onChange={(event) => updatePhoto(index, { title: event.target.value })} /></Field>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -709,7 +935,7 @@ export default function AdminPage() {
                     <Field label="备注"><textarea className={textareaClass} value={photo.note} onChange={(event) => updatePhoto(index, { note: event.target.value })} /></Field>
                     <div className="flex flex-wrap justify-between gap-2">
                       <SortButtons index={index} length={draft.photos.length} onMove={movePhoto} />
-                      <button className={dangerButtonClass} onClick={() => void removePhoto(index)}><Trash2 className="size-4" />删除</button>
+                      <button className={dangerButtonClass} onClick={() => void removePhoto(index)}><Trash2 className="size-4" />鍒犻櫎</button>
                     </div>
                   </div>
                 </article>
@@ -718,7 +944,7 @@ export default function AdminPage() {
           </section>
 
           <section id="admin-story" className={`${panelClass} ${isHighlighted("story") ? highlightClass : ""}`}>
-            <SectionHeader eyebrow="私人电影日志" title="故事管理" count={`${draft.story.length} 个故事`}>
+	            <SectionHeader eyebrow="私人电影日志" title="故事管理" count={`${draft.story.length} 个故事`}>
               <button className={`${buttonClass} w-full sm:w-auto`} onClick={addStory}><Plus className="size-4" />新增故事</button>
             </SectionHeader>
             <div className="grid gap-4">
@@ -729,7 +955,7 @@ export default function AdminPage() {
                     <label className={`${ghostButtonClass} mt-3 w-full cursor-pointer`}>
                       <Camera className="size-4" />
                       上传封面
-                      <input className="sr-only" type="file" accept="image/*" onChange={(event) => void replaceStoryImage(event, index)} />
+                      <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void replaceStoryImage(event, index)} />
                     </label>
                   </div>
                   <div className="grid gap-3">
@@ -759,8 +985,32 @@ export default function AdminPage() {
             </div>
           </section>
 
+          <section id="admin-timeAtmosphere" className={`${panelClass} ${isHighlighted("timeAtmosphere") ? highlightClass : ""}`}>
+            <SectionHeader eyebrow="最近几天的光" title="生活气味" count={`${draft.timeAtmosphere.length} 条`}>
+              <button className={`${buttonClass} w-full sm:w-auto`} onClick={addTimeAtmosphere}><Plus className="size-4" />新增生活气味</button>
+            </SectionHeader>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {draft.timeAtmosphere.map((item, index) => (
+                <article key={`${item.season}-${item.city}-${index}`} data-admin-target={`timeAtmosphere:${index}`} className={`${cardClass} ${isHighlighted("timeAtmosphere", index) ? highlightClass : ""}`}>
+                  <div className="grid gap-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="季节 / 日期"><input className={inputClass} value={item.season} onChange={(event) => updateTimeAtmosphere(index, { season: event.target.value })} /></Field>
+                      <Field label="天气"><input className={inputClass} value={item.weather} onChange={(event) => updateTimeAtmosphere(index, { weather: event.target.value })} /></Field>
+                    </div>
+                    <Field label="地点"><input className={inputClass} value={item.city} onChange={(event) => updateTimeAtmosphere(index, { city: event.target.value })} /></Field>
+                    <Field label="描述"><textarea className={textareaClass} value={item.line} onChange={(event) => updateTimeAtmosphere(index, { line: event.target.value })} /></Field>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <SortButtons index={index} length={draft.timeAtmosphere.length} onMove={moveTimeAtmosphere} />
+                      <button className={dangerButtonClass} onClick={() => removeTimeAtmosphere(index)}><Trash2 className="size-4" />鍒犻櫎</button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
           <section id="admin-lifeFragments" className={`${panelClass} ${isHighlighted("lifeFragments") ? highlightClass : ""}`}>
-            <SectionHeader eyebrow="不一定有大事" title="生活片段" count={`${draft.lifeFragments.length} 张小卡片`}>
+            <SectionHeader eyebrow="不一定有大事" title="生活片段" count={`${draft.lifeFragments.length} 寮犲皬鍗＄墖`}>
               <button className={`${buttonClass} w-full sm:w-auto`} onClick={addLifeFragment}><ListPlus className="size-4" />新增卡片</button>
             </SectionHeader>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -772,7 +1022,10 @@ export default function AdminPage() {
                       <Field label="地点"><input className={inputClass} value={item.place} onChange={(event) => updateLifeFragment(index, { place: event.target.value })} /></Field>
                     </div>
                     <Field label="内容"><textarea className={textareaClass} value={item.text} onChange={(event) => updateLifeFragment(index, { text: event.target.value })} /></Field>
-                    <button className={dangerButtonClass} onClick={() => removeLifeFragment(index)}><Trash2 className="size-4" />删除片段</button>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <SortButtons index={index} length={draft.lifeFragments.length} onMove={moveLifeFragment} />
+                      <button className={dangerButtonClass} onClick={() => removeLifeFragment(index)}><Trash2 className="size-4" />鍒犻櫎鐗囨</button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -792,7 +1045,7 @@ export default function AdminPage() {
                     <Field label="备注"><textarea className={textareaClass} value={item.note} onChange={(event) => updateAnniversary(index, { note: event.target.value })} /></Field>
                     <div className="flex flex-wrap justify-between gap-2">
                       <SortButtons index={index} length={draft.anniversaries.length} onMove={moveAnniversary} />
-                      <button className={dangerButtonClass} onClick={() => removeAnniversary(index)}><Trash2 className="size-4" />删除</button>
+                      <button className={dangerButtonClass} onClick={() => removeAnniversary(index)}><Trash2 className="size-4" />鍒犻櫎</button>
                     </div>
                   </div>
                 </article>
@@ -801,7 +1054,7 @@ export default function AdminPage() {
           </section>
 
           <section id="admin-wishes" className={`${panelClass} ${isHighlighted("wishes") ? highlightClass : ""}`}>
-            <SectionHeader eyebrow="以后一起做" title="愿望清单" count={`${draft.wishes.length} 个愿望`}>
+	            <SectionHeader eyebrow="以后一起做" title="愿望清单" count={`${draft.wishes.length} 个愿望`}>
               <button className={`${buttonClass} w-full sm:w-auto`} onClick={addWish}><Plus className="size-4" />新增愿望</button>
             </SectionHeader>
             <div className="grid gap-3 md:grid-cols-2">
@@ -818,7 +1071,7 @@ export default function AdminPage() {
                       <Field label="愿望内容"><input className={inputClass} value={wish} onChange={(event) => updateWish(index, event.target.value)} /></Field>
                       <div className="flex flex-wrap justify-between gap-2">
                         <SortButtons index={index} length={draft.wishes.length} onMove={moveWish} />
-                        <button className={dangerButtonClass} onClick={() => removeWish(index)}><Trash2 className="size-4" />删除</button>
+                        <button className={dangerButtonClass} onClick={() => removeWish(index)}><Trash2 className="size-4" />鍒犻櫎</button>
                       </div>
                     </div>
                   </article>
@@ -836,11 +1089,20 @@ export default function AdminPage() {
                 <article key={`${entry.date}-${entry.text}-${index}`} data-admin-target={`diarySeeds:${index}`} className={`${cardClass} ${isHighlighted("diarySeeds", index) ? highlightClass : ""}`}>
                   <div className="grid gap-3">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Field label="作者"><input className={inputClass} value={entry.by} onChange={(event) => updateDiary(index, { by: event.target.value })} /></Field>
+	                      <Field label="作者">
+	                        <select className={inputClass} value={entry.by} onChange={(event) => updateDiary(index, { by: event.target.value })}>
+	                          {[draft.couple.leftName, draft.couple.rightName].map((name) => (
+	                            <option key={name} value={name}>{name}</option>
+	                          ))}
+	                        </select>
+	                      </Field>
                       <Field label="日期"><input className={inputClass} type="date" value={dotDateToValue(entry.date)} onChange={(event) => updateDiary(index, { date: valueToDotDate(event.target.value) })} /></Field>
                     </div>
                     <Field label="内容"><textarea className={textareaClass} value={entry.text} onChange={(event) => updateDiary(index, { text: event.target.value })} /></Field>
-                    <button className={dangerButtonClass} onClick={() => removeDiary(index)}><Trash2 className="size-4" />删除日记</button>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <SortButtons index={index} length={draft.diarySeeds.length} onMove={moveDiary} />
+                      <button className={dangerButtonClass} onClick={() => removeDiary(index)}><Trash2 className="size-4" />删除日记</button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -861,7 +1123,10 @@ export default function AdminPage() {
                       <Field label="地图纵向位置"><input className={inputClass} type="number" min={0} max={100} value={trip.y} onChange={(event) => updateTrip(index, { y: Number(event.target.value) })} /></Field>
                     </div>
                     <Field label="这座城市的记忆"><textarea className={textareaClass} value={trip.caption} onChange={(event) => updateTrip(index, { caption: event.target.value })} /></Field>
-                    <button className={dangerButtonClass} onClick={() => removeTrip(index)}><Trash2 className="size-4" />删除城市</button>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <SortButtons index={index} length={draft.trips.length} onMove={moveTrip} />
+                      <button className={dangerButtonClass} onClick={() => removeTrip(index)}><Trash2 className="size-4" />删除城市</button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -877,19 +1142,54 @@ export default function AdminPage() {
                   <Field label="左侧姓名"><input className={inputClass} value={draft.couple.leftName} onChange={(event) => updateCouple("leftName", event.target.value)} /></Field>
                   <Field label="右侧姓名"><input className={inputClass} value={draft.couple.rightName} onChange={(event) => updateCouple("rightName", event.target.value)} /></Field>
                   <Field label="恋爱开始日期"><input className={inputClass} type="date" value={draft.couple.startDate} onChange={(event) => updateCouple("startDate", event.target.value)} /></Field>
-                  <Field label="私密页密码"><input className={inputClass} value={draft.couple.password} onChange={(event) => updateCouple("password", event.target.value)} /></Field>
+                  <Field label="设置新访问密码">
+                    <div className="grid gap-2">
+                      <input
+                        className={inputClass}
+                        type="password"
+                        autoComplete="new-password"
+                        value={passwordInput}
+                        placeholder="留空则不修改"
+                        onChange={(event) => {
+                          setPasswordInput(event.target.value);
+                          setPasswordNotice("");
+                        }}
+                      />
+                      <button className={`${ghostButtonClass} w-fit`} disabled={passwordBusy || !passwordInput.trim()} onClick={() => void updateAccessPassword()}>
+                        {passwordBusy ? "正在更新..." : "更新访问密码"}
+                      </button>
+                      {passwordNotice && <p className="text-sm leading-6 text-[#315f5a]/70">{passwordNotice}</p>}
+                    </div>
+                  </Field>
                   <Field label="首页标题"><input className={inputClass} value={draft.couple.heroLine} onChange={(event) => updateCouple("heroLine", event.target.value)} /></Field>
                   <Field label="首页副标题"><textarea className={textareaClass} value={draft.couple.subLine} onChange={(event) => updateCouple("subLine", event.target.value)} /></Field>
                   <label className={`${ghostButtonClass} w-full cursor-pointer sm:col-span-2`}>
                     <Camera className="size-4" />
                     上传首页背景图
-                    <input className="sr-only" type="file" accept="image/*" onChange={(event) => void uploadHero(event)} />
+                    <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void uploadHero(event)} />
                   </label>
+                </div>
+                <div className="mt-5 grid gap-3" data-admin-target="basic:section">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm text-[#315f5a]/70">首页三条摘要</p>
+	                    <button className={ghostButtonClass} onClick={addHeroNote}><Plus className="size-4" />新增一句</button>
+                  </div>
+                  {draft.couple.heroNotes.map((note, index) => (
+                    <div key={`${note}-${index}`} className="rounded-2xl border border-[#9dbbab]/16 bg-white/46 p-3" data-admin-target={`basic:heroNote-${index}`}>
+                      <Field label={`鎽樿 ${index + 1}`}>
+                        <textarea className={`${textareaClass} min-h-20`} value={note} onChange={(event) => updateHeroNote(index, event.target.value)} />
+                      </Field>
+                      <div className="mt-3 flex flex-wrap justify-between gap-2">
+                        <SortButtons index={index} length={draft.couple.heroNotes.length} onMove={moveHeroNote} />
+                        <button className={dangerButtonClass} onClick={() => removeHeroNote(index)}><Trash2 className="size-4" />鍒犻櫎</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               <div className={cardClass}>
-                <h3 className="mb-4 flex items-center gap-2 text-lg text-[#244d49]"><Music2 className="size-5" />音乐与导航</h3>
+	                <h3 className="mb-4 flex items-center gap-2 text-lg text-[#244d49]"><Music2 className="size-5" />音乐与导航</h3>
                 <div className="grid gap-3">
                   <Field label="音乐名字"><input className={inputClass} value={draft.siteText.player.title} onChange={(event) => updatePlayer("title", event.target.value)} /></Field>
                   <label className={`${ghostButtonClass} w-full cursor-pointer`}>
@@ -970,3 +1270,5 @@ function SortButtons({
     </div>
   );
 }
+
+

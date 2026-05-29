@@ -4,6 +4,7 @@ import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ArrowDown } from "lucide-react";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { daysBetween } from "@/lib/date";
 import { useContent } from "@/lib/content-store";
 
@@ -19,9 +20,10 @@ export function Hero() {
   const [days, setDays] = useState(daysBetween(couple.startDate));
 
   useEffect(() => {
+    setDays(daysBetween(couple.startDate));
     const timer = window.setInterval(() => setDays(daysBetween(couple.startDate)), 60_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [couple.startDate]);
 
   return (
     <section
@@ -47,17 +49,22 @@ export function Hero() {
           transition={{ duration: 1.15, ease: [0.22, 1, 0.36, 1] }}
           className="max-w-3xl"
         >
-          <div className="mb-6 inline-flex border-b border-[#7fb7ac]/38 pb-2 text-sm text-[#3f6862]">
+          <ItemEditLink section="basic" item="section" className="mb-4" />
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="mb-6 inline-flex border-b border-[#7fb7ac]/38 pb-2 text-sm text-[#3f6862] transition hover:border-[#315f5a]/50 hover:text-[#214f49]"
+          >
             {couple.leftName} {couple.nameConnector} {couple.rightName}
-          </div>
+          </button>
           <h1 className="cinema-title text-balance text-[clamp(2.25rem,5.25vw,5.2rem)] leading-[1.13] text-[#214f49]">
             {couple.heroLine}
           </h1>
           <p className="mt-6 max-w-2xl text-[17px] leading-9 text-[#315f5a]/82 sm:text-[18px]">{couple.subLine}</p>
 
           <div className="mt-8 grid max-w-2xl gap-2 text-[15px] leading-7 text-[#315f5a]/78 sm:grid-cols-3">
-            {couple.heroNotes.map((note) => (
-              <p key={note} className="border border-[#8fb5a3]/18 bg-[#fffdf1]/34 px-4 py-3 shadow-[0_8px_20px_rgba(37,73,67,.035)]">
+            {couple.heroNotes.map((note, index) => (
+              <p key={`${note}-${index}`} className="border border-[#8fb5a3]/18 bg-[#fffdf1]/34 px-4 py-3 shadow-[0_8px_20px_rgba(37,73,67,.035)]">
                 {note}
               </p>
             ))}

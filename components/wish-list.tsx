@@ -38,7 +38,7 @@ export function WishList() {
           const checked = done.includes(wish);
           return (
             <motion.div
-              key={wish}
+              key={`${wish}-${index}`}
               layout
               tabIndex={0}
               className="group relative flex flex-wrap items-center gap-4 border border-[#9dbbab]/18 bg-[#fffdf1]/56 p-4 pr-12 text-left transition hover:bg-[#fffdf1]/86 focus-within:bg-[#fffdf1]/80 focus:outline-none"

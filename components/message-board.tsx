@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { FormEvent, useState } from "react";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { useContent } from "@/lib/content-store";
 
 export function MessageBoard() {
@@ -26,7 +27,8 @@ export function MessageBoard() {
   }
 
   return (
-    <div className="border border-[#9dbbab]/22 bg-[#fffdf1]/62 p-5 shadow-[0_16px_42px_rgba(37,73,67,.08)] sm:p-7">
+    <div className="relative border border-[#9dbbab]/22 bg-[#fffdf1]/62 p-5 shadow-[0_16px_42px_rgba(37,73,67,.08)] sm:p-7">
+      <ItemEditLink section="basic" item="messageBoard" className="absolute right-3 top-3 opacity-35 hover:opacity-85" />
       <form onSubmit={submit} className="mb-5 flex gap-3 border border-[#8fb5a3]/18 bg-white/54 p-2">
         <input value={text} onChange={(event) => setText(event.target.value)} placeholder={siteText.messageBoard.placeholder} className="min-w-0 flex-1 bg-transparent px-3 text-[16px] text-[#244d49] outline-none placeholder:text-[#315f5a]/36" />
         <button aria-label={siteText.messageBoard.sendLabel} className="rounded-full bg-[#6fb79f] px-4 text-sm text-white transition hover:bg-[#5da98f]">

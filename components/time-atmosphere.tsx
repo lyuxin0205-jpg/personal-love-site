@@ -2,6 +2,7 @@
 
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { useContent } from "@/lib/content-store";
 
 const offsets = ["lg:translate-y-8", "lg:-translate-y-2", "lg:translate-y-14"];
@@ -18,14 +19,15 @@ export function TimeAtmosphere() {
       <div className="grid gap-4 sm:grid-cols-3 sm:gap-5">
         {timeAtmosphere.map((item, index) => (
           <motion.article
-            key={`${item.season}-${item.city}`}
+            key={`${item.season}-${item.city}-${index}`}
             initial={{ opacity: 0, y: 18 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-10%" }}
             transition={{ duration: 1, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
             whileHover={{ y: -4 }}
-            className={`border-l border-[#8fb5a3]/32 bg-[#fffdf1]/46 px-5 py-5 shadow-[0_16px_38px_rgba(37,73,67,.055)] backdrop-blur-[5px] ${offsets[index % offsets.length]}`}
+            className={`relative border-l border-[#8fb5a3]/32 bg-[#fffdf1]/46 px-5 py-5 pr-12 shadow-[0_16px_38px_rgba(37,73,67,.055)] backdrop-blur-[5px] ${offsets[index % offsets.length]}`}
           >
+            <ItemEditLink section="timeAtmosphere" item={index} className="absolute right-3 top-3 opacity-35 hover:opacity-85" />
             <div className="mb-5 flex items-baseline justify-between gap-4 text-[13px] text-[#6f9284]">
               <span>{item.season}</span>
               <span>{item.weather}</span>

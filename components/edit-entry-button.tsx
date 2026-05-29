@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { PencilLine } from "lucide-react";
 
 export function EditEntryButton() {
   const pathname = usePathname();
@@ -12,9 +13,10 @@ export function EditEntryButton() {
     <Link
       href="/admin"
       aria-label="进入内容管理"
-      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 grid size-10 place-items-center rounded-full border border-[#4e8173]/18 bg-[#fffdf1]/56 text-base font-medium leading-none text-[#315f5a]/54 shadow-[0_8px_24px_rgba(37,73,67,.055)] backdrop-blur-[3px] transition duration-500 ease-out hover:-translate-y-0.5 hover:border-[#315f5a]/34 hover:bg-[#eef5dc]/76 hover:text-[#173f3a]/82 active:translate-y-0 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#6fb79f]/24 sm:bottom-[calc(1.25rem+env(safe-area-inset-bottom))] sm:right-5"
+      title="进入内容管理"
+      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 grid size-10 place-items-center rounded-full border border-[#4e8173]/18 bg-[#fffdf1]/56 text-[#315f5a]/54 shadow-[0_8px_24px_rgba(37,73,67,.055)] backdrop-blur-[3px] transition duration-500 ease-out hover:-translate-y-0.5 hover:border-[#315f5a]/34 hover:bg-[#eef5dc]/76 hover:text-[#173f3a]/82 active:translate-y-0 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#6fb79f]/24 sm:bottom-[calc(1.25rem+env(safe-area-inset-bottom))] sm:right-5"
     >
-      <span aria-hidden="true">✎</span>
+      <PencilLine className="size-4" strokeWidth={1.7} aria-hidden="true" />
     </Link>
   );
 }

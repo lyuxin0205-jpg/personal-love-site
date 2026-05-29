@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PencilLine } from "lucide-react";
 
-type EditSection = "story" | "photos" | "diarySeeds" | "lifeFragments" | "trips" | "anniversaries" | "wishes";
+type EditSection = "story" | "photos" | "diarySeeds" | "lifeFragments" | "timeAtmosphere" | "trips" | "anniversaries" | "wishes" | "basic";
 
 export function ItemEditLink({
   section,

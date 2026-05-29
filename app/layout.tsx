@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { BackToTopButton } from "@/components/back-to-top-button";
 import { couple, siteText } from "@/data/site";
 import { EditEntryButton } from "@/components/edit-entry-button";
 import { SiteAccessGate } from "@/components/site-access-gate";
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <SiteAccessGate>
             {children}
             <EditEntryButton />
+            <BackToTopButton />
           </SiteAccessGate>
         </ContentProvider>
       </body>
