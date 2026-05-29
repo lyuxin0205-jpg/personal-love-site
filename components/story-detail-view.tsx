@@ -38,7 +38,10 @@ export function StoryDetailView({ slug }: { slug: string }) {
       <AmbientLayers />
       <motion.div style={{ y: airY }} className="pointer-events-none absolute inset-x-0 top-0 h-[72vh] bg-[linear-gradient(180deg,rgba(178,218,210,.34),rgba(245,247,237,0)_72%)]" />
       <motion.div initial={{ opacity: 0, y: 18, filter: "blur(8px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ duration: 1.05, ease: [0.22, 1, 0.36, 1] }} className="relative z-10 mx-auto max-w-6xl">
-        <Link href="/#story" className="inline-flex border-b border-[#8fb5a3]/40 pb-1 text-sm text-[#315f5a]/68 transition duration-700 hover:border-[#315f5a]/50 hover:text-[#244d49]">
+        <Link
+          href="/#story"
+          className="inline-flex rounded-full border border-[#4e8173]/28 bg-[#fffdf1]/54 px-3.5 py-1.5 text-sm font-medium text-[#214f49] transition duration-500 ease-out hover:-translate-y-0.5 hover:border-[#315f5a]/42 hover:bg-[#eef5dc]/72 hover:text-[#173f3a] active:translate-y-0 active:scale-[0.98]"
+        >
           {siteText.storyDetail.backLabel}
         </Link>
 
