@@ -1,4 +1,5 @@
 import { daysUntil } from "@/lib/date";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { useContent } from "@/lib/content-store";
 
 export function AnniversaryReminders() {
@@ -13,7 +14,7 @@ export function AnniversaryReminders() {
         </div>
       </div>
       <div className="grid gap-4">
-        {anniversaries.map((item) => {
+        {anniversaries.map((item, index) => {
           const left = daysUntil(item.date);
           return (
             <article key={item.title} className="border-b border-[#9dbbab]/18 bg-white/38 p-4 last:border-b-0">
@@ -27,6 +28,7 @@ export function AnniversaryReminders() {
                   <p className="text-xs text-[#315f5a]/40">{siteText.reminders.dayUnit}</p>
                 </div>
               </div>
+              <ItemEditLink section="anniversaries" item={index} className="mt-4" />
             </article>
           );
         })}
