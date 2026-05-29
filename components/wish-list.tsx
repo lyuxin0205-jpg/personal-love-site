@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Circle } from "lucide-react";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { useContent } from "@/lib/content-store";
 
 export function WishList() {
@@ -12,7 +13,9 @@ export function WishList() {
 
   function toggleWish(wish: string) {
     updateContent((current) => {
-      const completed = done.includes(wish) ? done.filter((item) => item !== wish) : [...done, wish];
+      const completed = current.siteText.wishlist.completed.includes(wish)
+        ? current.siteText.wishlist.completed.filter((item) => item !== wish)
+        : [...current.siteText.wishlist.completed, wish];
 
       return {
         ...current,
@@ -29,21 +32,23 @@ export function WishList() {
       <p className="mb-4 text-sm text-[#6f9284]">{siteText.wishlist.eyebrow}</p>
       <h2 className="cinema-title mb-8 text-4xl text-[#244d49]">{siteText.wishlist.title}</h2>
       <div className="grid gap-3">
-        {wishes.map((wish) => {
+        {wishes.map((wish, index) => {
           const checked = done.includes(wish);
           return (
-            <motion.button
+            <motion.div
               key={wish}
               layout
-              onClick={() => toggleWish(wish)}
-              className="group flex items-center gap-4 border border-[#9dbbab]/18 bg-[#fffdf1]/56 p-4 text-left transition hover:bg-[#fffdf1]/86"
+              className="group flex flex-wrap items-center gap-4 border border-[#9dbbab]/18 bg-[#fffdf1]/56 p-4 text-left transition hover:bg-[#fffdf1]/86"
             >
-              <span className={`grid size-8 shrink-0 place-items-center rounded-full border transition ${checked ? "border-[#6f9f60] bg-[#6f9f60] text-white" : "border-[#315f5a]/18 text-[#315f5a]/42"}`}>
-                {checked ? <Check className="size-4" /> : <Circle className="size-4" />}
-              </span>
-              <span className={`text-[15px] leading-7 transition ${checked ? "text-[#315f5a]/42 line-through" : "text-[#315f5a]/72 group-hover:text-[#244d49]"}`}>{wish}</span>
+              <button type="button" onClick={() => toggleWish(wish)} className="flex min-w-0 flex-1 items-center gap-4 text-left">
+                <span className={`grid size-8 shrink-0 place-items-center rounded-full border transition ${checked ? "border-[#6f9f60] bg-[#6f9f60] text-white" : "border-[#315f5a]/18 text-[#315f5a]/42"}`}>
+                  {checked ? <Check className="size-4" /> : <Circle className="size-4" />}
+                </span>
+                <span className={`text-[15px] leading-7 transition ${checked ? "text-[#315f5a]/42 line-through" : "text-[#315f5a]/72 group-hover:text-[#244d49]"}`}>{wish}</span>
+              </button>
               <AnimatePresence>{checked && <motion.span initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} className="ml-auto text-sm text-[#6f9f60]">{siteText.wishlist.doneLabel}</motion.span>}</AnimatePresence>
-            </motion.button>
+              <ItemEditLink section="wishes" item={index} className="ml-auto" />
+            </motion.div>
           );
         })}
       </div>
