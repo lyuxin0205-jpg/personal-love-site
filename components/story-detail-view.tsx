@@ -5,6 +5,7 @@ import { useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AmbientLayers } from "@/components/ambient-layers";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { MusicPlayer } from "@/components/music-player";
 import { Starfield } from "@/components/starfield";
 import { StoryNotFoundView } from "@/components/story-not-found-view";
@@ -115,6 +116,7 @@ export function StoryDetailView({ slug }: { slug: string }) {
           </section>
         </article>
       </motion.div>
+      <ItemEditLink section="story" item={item.slug} fixed />
       <MusicPlayer />
     </main>
   );
