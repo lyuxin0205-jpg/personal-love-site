@@ -40,7 +40,10 @@ export function StoryTimeline() {
               </Link>
               {"meta" in item && <p className="mb-5 w-fit bg-[#e6f0d2]/66 px-3 py-1 text-sm text-[#61796e]">{item.meta}</p>}
               <p className="max-w-[38rem] text-[16px] leading-9 text-[#315f5a]/78">{item.text}</p>
-              <Link href={`/story/${item.slug}`} className="mt-6 inline-flex border-b border-[#8fb5a3]/40 pb-1 text-sm text-[#315f5a]/66 transition duration-700 hover:border-[#315f5a]/50 hover:text-[#244d49]">
+              <Link
+                href={`/story/${item.slug}`}
+                className="mt-6 inline-flex w-fit items-center rounded-full border border-[#4e8173]/38 bg-[#eef5dc]/78 px-4 py-2 text-sm font-medium text-[#214f49] shadow-[0_10px_24px_rgba(37,73,67,.055)] transition duration-500 ease-out hover:-translate-y-0.5 hover:border-[#315f5a]/48 hover:bg-[#e4efd1] hover:text-[#173f3a] active:translate-y-0 active:scale-[0.98]"
+              >
                 {siteText.storyDetail.openLabel}
               </Link>
             </div>
