@@ -2,7 +2,7 @@
 
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { siteContent } from "@/data/site";
-import { isSupabaseConfigured, loadSiteContentFromSupabase, saveSiteContentToSupabase, uploadMediaToSupabase } from "@/lib/supabase-client";
+import { deleteMediaFromSupabase, isSupabaseConfigured, loadSiteContentFromSupabase, saveSiteContentToSupabase, uploadMediaToSupabase } from "@/lib/supabase-client";
 
 export type SiteContent = typeof siteContent;
 
@@ -16,7 +16,8 @@ type ContentContextValue = {
   updateContent: (updater: (current: SiteContent) => SiteContent) => void;
   resetContent: () => void;
   refreshContent: () => Promise<void>;
-  uploadFile: (file: File, folder: "images" | "audio") => Promise<string>;
+  uploadFile: (file: File, folder: "images" | "audio", onProgress?: (progress: number) => void) => Promise<string>;
+  deleteFile: (fileUrl: string) => Promise<void>;
   storageKey: string;
 };
 
@@ -72,11 +73,18 @@ function withDerivedContent(content: SiteContent): SiteContent {
   };
 }
 
-function readFileAsDataUrl(file: File) {
+function readFileAsDataUrl(file: File, onProgress?: (progress: number) => void) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
+    reader.onload = () => {
+      onProgress?.(100);
+      resolve(String(reader.result));
+    };
     reader.onerror = () => reject(new Error("读取文件失败"));
+    reader.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
     reader.readAsDataURL(file);
   });
 }
@@ -93,6 +101,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   const saveRemote = useCallback(
     (next: SiteContent) => {
       if (!remoteEnabled || typeof window === "undefined") {
+        setLastSavedAt(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
         setStatus("ready");
         return;
       }
@@ -172,7 +181,8 @@ export function ContentProvider({ children }: { children: ReactNode }) {
         persist(siteContent);
       },
       refreshContent,
-      uploadFile: (file, folder) => (remoteEnabled ? uploadMediaToSupabase(file, folder) : readFileAsDataUrl(file)),
+      uploadFile: (file, folder, onProgress) => (remoteEnabled ? uploadMediaToSupabase(file, folder, onProgress) : readFileAsDataUrl(file, onProgress)),
+      deleteFile: (fileUrl) => (remoteEnabled ? deleteMediaFromSupabase(fileUrl) : Promise.resolve()),
       storageKey: STORAGE_KEY
     };
   }, [content, lastSavedAt, refreshContent, remoteEnabled, saveError, saveRemote, status]);

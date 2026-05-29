@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { couple, siteText } from "@/data/site";
 import { EditEntryButton } from "@/components/edit-entry-button";
+import { SiteAccessGate } from "@/components/site-access-gate";
 import { ContentProvider } from "@/lib/content-store";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -33,8 +34,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="zh-CN">
       <body>
         <ContentProvider>
-          {children}
-          <EditEntryButton />
+          <SiteAccessGate>
+            {children}
+            <EditEntryButton />
+          </SiteAccessGate>
         </ContentProvider>
       </body>
     </html>

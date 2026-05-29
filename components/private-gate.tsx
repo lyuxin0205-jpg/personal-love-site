@@ -8,12 +8,13 @@ import { useContent } from "@/lib/content-store";
 export function PrivateGate({ onUnlock }: { onUnlock: () => void }) {
   const { content } = useContent();
   const { couple, siteText } = content;
+  const passcode = process.env.NEXT_PUBLIC_SITE_PASSCODE || couple.password;
   const [password, setPassword] = useState("");
   const [error, setError] = useState(false);
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (password === couple.password) {
+    if (password === passcode) {
       onUnlock();
       return;
     }

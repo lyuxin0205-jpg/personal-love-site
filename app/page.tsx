@@ -13,7 +13,6 @@ import { LoveMap } from "@/components/love-map";
 import { MessageBoard } from "@/components/message-board";
 import { MusicPlayer } from "@/components/music-player";
 import { PhotoWall } from "@/components/photo-wall";
-import { PrivateGate } from "@/components/private-gate";
 import { SectionHeader } from "@/components/section-header";
 import { StoryTimeline } from "@/components/story-timeline";
 import { ThreeDAlbum } from "@/components/three-d-album";
@@ -24,7 +23,6 @@ import { useContent } from "@/lib/content-store";
 
 export default function Home() {
   const [ready, setReady] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
   const { content } = useContent();
   const { siteText } = content;
   const { scrollYProgress } = useScroll();
@@ -32,20 +30,8 @@ export default function Home() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => setReady(true), 1350);
-    setUnlocked(window.localStorage.getItem("only-us-unlocked") === "true");
     return () => window.clearTimeout(timer);
   }, []);
-
-  if (!unlocked) {
-    return (
-      <PrivateGate
-        onUnlock={() => {
-          window.localStorage.setItem("only-us-unlocked", "true");
-          setUnlocked(true);
-        }}
-      />
-    );
-  }
 
   return (
     <main className="relative min-h-screen overflow-x-clip bg-ink text-cream selection:bg-gold/25 selection:text-cream">

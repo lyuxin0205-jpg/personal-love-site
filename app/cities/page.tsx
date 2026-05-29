@@ -29,8 +29,9 @@ export default function CitiesPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-10%" }}
                 transition={{ duration: 0.8, delay: index * 0.04, ease: [0.22, 1, 0.36, 1] }}
-                className="border border-[#8fb5a3]/18 bg-[#fffdf1]/46 p-5 shadow-[0_12px_28px_rgba(37,73,67,.045)]"
+                className="relative border border-[#8fb5a3]/18 bg-[#fffdf1]/46 p-5 pr-12 shadow-[0_12px_28px_rgba(37,73,67,.045)]"
               >
+                <ItemEditLink section="trips" item={index} className="absolute right-3 top-3" />
                 <p className="cinema-title text-3xl leading-tight text-[#244d49]">{trip.city}</p>
                 <p className="mt-5 min-h-24 text-[15px] leading-8 text-[#315f5a]/72">{trip.caption}</p>
                 {related && (
@@ -41,7 +42,6 @@ export default function CitiesPage() {
                     {siteText.storyDetail.openLabel}
                   </Link>
                 )}
-                <ItemEditLink section="trips" item={index} className="mt-3" />
               </motion.article>
             );
           })}

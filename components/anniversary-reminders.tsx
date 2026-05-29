@@ -17,7 +17,8 @@ export function AnniversaryReminders() {
         {anniversaries.map((item, index) => {
           const left = daysUntil(item.date);
           return (
-            <article key={item.title} className="border-b border-[#9dbbab]/18 bg-white/38 p-4 last:border-b-0">
+            <article key={item.title} className="relative border-b border-[#9dbbab]/18 bg-white/38 p-4 pr-12 last:border-b-0">
+              <ItemEditLink section="anniversaries" item={index} className="absolute right-3 top-3 opacity-40 hover:opacity-85" />
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[#244d49]">{item.title}</p>
@@ -28,7 +29,6 @@ export function AnniversaryReminders() {
                   <p className="text-xs text-[#315f5a]/40">{siteText.reminders.dayUnit}</p>
                 </div>
               </div>
-              <ItemEditLink section="anniversaries" item={index} className="mt-4" />
             </article>
           );
         })}

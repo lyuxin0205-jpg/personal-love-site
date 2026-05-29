@@ -38,13 +38,13 @@ export function CoupleDiary() {
       </form>
       <div className="grid gap-4">
         {diarySeeds.map((entry, index) => (
-          <motion.article key={`${entry.date}-${entry.text}`} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }} className="border-l border-[#8fb5a3]/34 bg-white/48 p-5">
-            <div className="mb-3 flex items-center justify-between">
+          <motion.article key={`${entry.date}-${entry.text}`} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }} className="relative border-l border-[#8fb5a3]/34 bg-white/48 p-5 pr-12">
+            <ItemEditLink section="diarySeeds" item={index} className="absolute right-3 top-3" />
+            <div className="mb-3 flex items-center justify-between gap-4">
               <p className="text-sm text-[#5b8f7f]">{entry.by}</p>
               <p className="text-xs text-[#315f5a]/40">{entry.date}</p>
             </div>
             <p className="text-[15px] leading-8 text-[#315f5a]/72">{entry.text}</p>
-            <ItemEditLink section="diarySeeds" item={index} className="mt-4" />
           </motion.article>
         ))}
       </div>

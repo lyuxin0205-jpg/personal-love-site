@@ -36,9 +36,12 @@ export function StoryTimeline() {
             </motion.div>
             <div className="self-center border-l border-[#9dbbab]/32 pl-5 sm:pl-7">
               <p className="mb-3 text-sm text-[#789284]">{item.date}</p>
-              <Link href={`/story/${item.slug}`} className="group/title inline-block">
-                <h3 className="cinema-title mb-4 text-3xl leading-[1.22] text-[#244d49] transition duration-700 group-hover/title:text-[#1f4542] sm:text-[2.15rem]">{item.title}</h3>
-              </Link>
+              <div className="mb-4 flex max-w-[42rem] items-start gap-2">
+                <Link href={`/story/${item.slug}`} className="group/title min-w-0">
+                  <h3 className="cinema-title text-3xl leading-[1.22] text-[#244d49] transition duration-700 group-hover/title:text-[#1f4542] sm:text-[2.15rem]">{item.title}</h3>
+                </Link>
+                <ItemEditLink section="story" item={item.slug} className="mt-1 opacity-35 hover:opacity-90" />
+              </div>
               {"meta" in item && <p className="mb-5 w-fit bg-[#e6f0d2]/66 px-3 py-1 text-sm text-[#61796e]">{item.meta}</p>}
               <p className="max-w-[38rem] text-[16px] leading-9 text-[#315f5a]/78">{item.text}</p>
               <Link
@@ -47,7 +50,6 @@ export function StoryTimeline() {
               >
                 {siteText.storyDetail.openLabel}
               </Link>
-              <ItemEditLink section="story" item={item.slug} className="ml-3 mt-6" />
             </div>
           </motion.article>
         ))}

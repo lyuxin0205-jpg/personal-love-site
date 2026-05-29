@@ -33,6 +33,8 @@ type AlbumRow = {
 type DiaryRow = { id: string; by: string; text: string; date: string; sort_order: number | null };
 type CityRow = { id: string; city: string; x: number; y: number; caption: string; sort_order: number | null };
 type AnniversaryRow = { id: string; title: string; date: string; note: string; sort_order: number | null };
+type LifeFragmentRow = { id: string; time: string; place: string; text: string; sort_order: number | null };
+type WishRow = { id: string; text: string; completed: boolean; sort_order: number | null };
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -135,17 +137,30 @@ function normalizeAlbum(row: AlbumRow): SiteContent["photos"][number] {
 }
 
 export async function loadSiteContentFromSupabase(): Promise<{ content: SiteContent; empty: boolean }> {
-  const [settingsRows, stories, albums, diary, cities, anniversaries] = await Promise.all([
+  const [settingsRows, stories, albums, diary, cities, anniversaries, lifeFragments, wishes] = await Promise.all([
     selectRows<SettingRow>("site_settings", "key.asc"),
     selectRows<StoryRow>("stories"),
     selectRows<AlbumRow>("albums"),
     selectRows<DiaryRow>("diary"),
     selectRows<CityRow>("cities"),
-    selectRows<AnniversaryRow>("anniversaries")
+    selectRows<AnniversaryRow>("anniversaries"),
+    selectRows<LifeFragmentRow>("life_fragments"),
+    selectRows<WishRow>("wishes")
   ]);
 
   const settings = settingsToObject(settingsRows);
-  const empty = !settingsRows.length && !stories.length && !albums.length && !diary.length && !cities.length && !anniversaries.length;
+  const empty =
+    !settingsRows.length &&
+    !stories.length &&
+    !albums.length &&
+    !diary.length &&
+    !cities.length &&
+    !anniversaries.length &&
+    !lifeFragments.length &&
+    !wishes.length;
+  const siteText = withFallback(settings.siteText, siteContent.siteText);
+  const completedWishes = wishes.filter((item) => item.completed).map((item) => item.text);
+  const hasRemoteContent = !empty;
 
   return {
     empty,
@@ -157,28 +172,36 @@ export async function loadSiteContentFromSupabase(): Promise<{ content: SiteCont
         note: "内容从 Supabase 读取，后台保存后会同步给所有设备。"
       },
       couple: withFallback(settings.couple, siteContent.couple),
-      siteText: withFallback(settings.siteText, siteContent.siteText),
+      siteText: hasRemoteContent
+        ? {
+            ...siteText,
+            wishlist: {
+              ...siteText.wishlist,
+              completed: completedWishes
+            } as typeof siteText.wishlist & { completed: string[] }
+          }
+        : siteText,
       photoPlaceholders: withFallback(settings.photoPlaceholders, siteContent.photoPlaceholders),
-      lifeFragments: withFallback(settings.lifeFragments, siteContent.lifeFragments),
       timeAtmosphere: withFallback(settings.timeAtmosphere, siteContent.timeAtmosphere),
-      wishes: withFallback(settings.wishes, siteContent.wishes),
-      story: stories.length ? stories.map(normalizeStory) : siteContent.story,
-      photos: albums.length ? albums.map(normalizeAlbum) : siteContent.photos,
-      diarySeeds: diary.length ? diary.map(({ by, text, date }) => ({ by, text, date })) : siteContent.diarySeeds,
-      trips: cities.length ? cities.map(({ city, x, y, caption }) => ({ city, x, y, caption })) : siteContent.trips,
-      anniversaries: anniversaries.length ? anniversaries.map(({ title, date, note }) => ({ title, date, note })) : siteContent.anniversaries
+      story: hasRemoteContent ? stories.map(normalizeStory) : siteContent.story,
+      photos: hasRemoteContent ? albums.map(normalizeAlbum) : siteContent.photos,
+      diarySeeds: hasRemoteContent ? diary.map(({ by, text, date }) => ({ by, text, date })) : siteContent.diarySeeds,
+      trips: hasRemoteContent ? cities.map(({ city, x, y, caption }) => ({ city, x, y, caption })) : siteContent.trips,
+      anniversaries: hasRemoteContent ? anniversaries.map(({ title, date, note }) => ({ title, date, note })) : siteContent.anniversaries,
+      lifeFragments: hasRemoteContent ? lifeFragments.map(({ time, place, text }) => ({ time, place, text })) : siteContent.lifeFragments,
+      wishes: hasRemoteContent ? wishes.map(({ text }) => text) : siteContent.wishes
     }
   };
 }
 
 export async function saveSiteContentToSupabase(content: SiteContent) {
+  const wishlist = content.siteText.wishlist as typeof content.siteText.wishlist & { completed?: string[] };
+  const completed = wishlist.completed || [];
   const settings: SettingRow[] = [
     { key: "couple", value: content.couple },
     { key: "siteText", value: content.siteText },
     { key: "photoPlaceholders", value: content.photoPlaceholders },
-    { key: "lifeFragments", value: content.lifeFragments },
-    { key: "timeAtmosphere", value: content.timeAtmosphere },
-    { key: "wishes", value: content.wishes }
+    { key: "timeAtmosphere", value: content.timeAtmosphere }
   ];
 
   await Promise.all([
@@ -251,30 +274,87 @@ export async function saveSiteContentToSupabase(content: SiteContent) {
         note: item.note,
         sort_order: index
       }))
+    ),
+    replaceRows(
+      "life_fragments",
+      "id",
+      content.lifeFragments.map((item, index) => ({
+        id: `life-fragment-${index}`,
+        time: item.time,
+        place: item.place,
+        text: item.text,
+        sort_order: index
+      }))
+    ),
+    replaceRows(
+      "wishes",
+      "id",
+      content.wishes.map((item, index) => ({
+        id: `wish-${index}`,
+        text: item,
+        completed: completed.includes(item),
+        sort_order: index
+      }))
     )
   ]);
 }
 
-export async function uploadMediaToSupabase(file: File, folder: "images" | "audio") {
+export async function uploadMediaToSupabase(file: File, folder: "images" | "audio", onProgress?: (progress: number) => void) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error("Supabase 环境变量未配置，无法上传文件。");
   }
 
   const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase();
   const objectPath = `${folder}/${Date.now()}-${cleanName}`;
+
+  await new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("PUT", `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${objectPath}`);
+    request.setRequestHeader("apikey", SUPABASE_ANON_KEY || "");
+    request.setRequestHeader("Authorization", `Bearer ${SUPABASE_ANON_KEY || ""}`);
+    request.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    request.setRequestHeader("x-upsert", "true");
+
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
+
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        onProgress?.(100);
+        resolve();
+        return;
+      }
+      reject(new Error(`上传失败：${request.status} ${request.responseText}`));
+    };
+
+    request.onerror = () => reject(new Error("上传失败：网络连接异常"));
+    request.send(file);
+  });
+
+  return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${objectPath}`;
+}
+
+export async function deleteMediaFromSupabase(fileUrl: string) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+  const publicPrefix = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/`;
+  if (!fileUrl.startsWith(publicPrefix)) return;
+
+  const objectPath = decodeURIComponent(fileUrl.slice(publicPrefix.length));
+  if (!objectPath) return;
+
   const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${objectPath}`, {
-    method: "PUT",
+    method: "DELETE",
     headers: headers({
-      "Content-Type": file.type || "application/octet-stream",
-      "x-upsert": "true"
+      "Content-Type": "application/json"
     }),
-    body: file
+    body: JSON.stringify({ prefixes: [objectPath] })
   });
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`上传失败：${response.status} ${detail}`);
+    throw new Error(`删除照片失败：${response.status} ${detail}`);
   }
-
-  return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${objectPath}`;
 }
