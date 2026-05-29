@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { FormEvent, useState } from "react";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { useContent } from "@/lib/content-store";
 
 export function CoupleDiary() {
@@ -43,6 +44,7 @@ export function CoupleDiary() {
               <p className="text-xs text-[#315f5a]/40">{entry.date}</p>
             </div>
             <p className="text-[15px] leading-8 text-[#315f5a]/72">{entry.text}</p>
+            <ItemEditLink section="diarySeeds" item={index} className="mt-4" />
           </motion.article>
         ))}
       </div>
