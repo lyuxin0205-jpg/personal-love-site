@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { couple, siteText } from "@/data/site";
+import { EditEntryButton } from "@/components/edit-entry-button";
 import { ContentProvider } from "@/lib/content-store";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -31,7 +32,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="zh-CN">
       <body>
-        <ContentProvider>{children}</ContentProvider>
+        <ContentProvider>
+          {children}
+          <EditEntryButton />
+        </ContentProvider>
       </body>
     </html>
   );
