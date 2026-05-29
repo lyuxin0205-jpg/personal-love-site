@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
+import { ItemEditLink } from "@/components/item-edit-link";
 import { useContent } from "@/lib/content-store";
 
 const rotations = ["-rotate-[1.8deg]", "rotate-[1.1deg]", "-rotate-[.7deg]", "rotate-[2deg]", "-rotate-[1.2deg]", "rotate-[.6deg]"];
@@ -12,7 +13,7 @@ const offsets = ["mt-0", "mt-8", "mt-3", "mt-12", "mt-1", "mt-10"];
 export function PhotoWall() {
   const { content } = useContent();
   const { photoPlaceholders, photos, siteText } = content;
-  const [active, setActive] = useState<(typeof photos)[number] | null>(null);
+  const [active, setActive] = useState<{ photo: (typeof photos)[number]; index: number } | null>(null);
 
   return (
     <>
@@ -25,7 +26,7 @@ export function PhotoWall() {
             viewport={{ once: true, margin: "-10%" }}
             transition={{ delay: (index % 4) * 0.04, duration: 0.8 }}
             whileHover={{ y: -2, rotate: 0 }}
-            onClick={() => setActive(photo)}
+            onClick={() => setActive({ photo, index })}
             className={`mb-6 inline-block w-full break-inside-avoid text-left ${rotations[index % rotations.length]} ${offsets[index % offsets.length]}`}
           >
             <div className="relative bg-white p-3 pb-4 shadow-[0_18px_42px_rgba(58,91,80,.16)] ring-1 ring-[#355f56]/8 transition duration-500 hover:shadow-[0_22px_52px_rgba(58,91,80,.2)]">
@@ -78,11 +79,16 @@ export function PhotoWall() {
               <X className="size-5" />
             </button>
             <motion.div initial={{ scale: 0.96, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.98, y: 8 }} className="w-full max-w-4xl bg-white p-3 shadow-[0_24px_72px_rgba(58,91,80,.2)]" onClick={(event) => event.stopPropagation()}>
-              <Image src={active.src} alt={active.title} width={1400} height={1000} unoptimized={active.src.startsWith("data:")} className="max-h-[78vh] w-full object-contain brightness-[1.06] contrast-[1.03] saturate-[1.08]" />
+              <Image src={active.photo.src} alt={active.photo.title} width={1400} height={1000} unoptimized={active.photo.src.startsWith("data:")} className="max-h-[78vh] w-full object-contain brightness-[1.06] contrast-[1.03] saturate-[1.08]" />
               <div className="px-2 pb-2 pt-3 text-[#315f5a]">
-                <p className="text-lg">{active.title}</p>
-                <p className="mt-1 text-sm text-[#6a8178]">{active.date} / {active.place}</p>
-                <p className="mt-2 text-sm leading-6 text-[#496f67]/78">{active.note}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg">{active.photo.title}</p>
+                    <p className="mt-1 text-sm text-[#6a8178]">{active.photo.date} / {active.photo.place}</p>
+                  </div>
+                  <ItemEditLink section="photos" item={active.index} />
+                </div>
+                <p className="mt-2 text-sm leading-6 text-[#496f67]/78">{active.photo.note}</p>
               </div>
             </motion.div>
           </motion.div>
